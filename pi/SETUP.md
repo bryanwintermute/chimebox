@@ -8,11 +8,17 @@ You only need to do this once per device.
 
 ## What you'll end up with
 
-- A Pi 5 running Raspberry Pi OS Bookworm Lite (64-bit), no desktop.
+- A Pi 5 running Raspberry Pi OS Trixie Lite (64-bit), no desktop.
 - An admin user (`bryan`) with `sudo` and SSH key authentication.
 - The Pi reachable as `chimebox-dev.local` on your LAN.
 - Wi-Fi (or wired Ethernet) configured.
 - No password authentication over SSH.
+
+> **Why Trixie (Debian 13), not Bookworm (Debian 12)?** Trixie has been the
+> Pi OS default since October 2025 and has full security support until
+> August 2028. Bookworm's full security support ends in June 2026. Both
+> ship the same `basilisk2` package, so chimebox supports either, but
+> Trixie is the recommended choice for new installations.
 
 ## Prerequisites
 
@@ -45,7 +51,8 @@ Or download from <https://www.raspberrypi.com/software/>.
 3. Click **Choose Device** → **Raspberry Pi 5**.
 4. Click **Choose OS** → **Raspberry Pi OS (other)** → **Raspberry Pi OS
    Lite (64-bit)**. (The "Lite" variant has no desktop, which is what we
-   want.)
+   want. As of late 2025 this is based on Debian 13 "Trixie"; see the
+   note at the top of this file for why we prefer it over Bookworm.)
 5. Click **Choose Storage** → select your microSD/NVMe device. **Triple-
    check this is the right device** — Imager will overwrite it.
 6. Click **Next** → **Edit Settings** when prompted.

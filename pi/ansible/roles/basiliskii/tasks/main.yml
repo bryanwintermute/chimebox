@@ -2,7 +2,23 @@
 # roles/basiliskii/tasks/main.yml
 
 # Strategy: try apt first; if it fails, build from source.
-# (For v1 we assume apt works on Raspberry Pi OS Bookworm aarch64.)
+# (For v1 we assume apt works on Raspberry Pi OS Trixie/Bookworm aarch64
+# with the 'contrib' component enabled, which is the Pi OS default.)
+
+- name: Ensure 'contrib' component is enabled for basilisk2 (which lives there)
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list
+    regexp: '^(deb\s+http\S+\s+\S+)\s+main(?!\s+contrib)'
+    line: '\1 main contrib'
+    backrefs: true
+    state: present
+  register: contrib_enabled
+  failed_when: false
+
+- name: Refresh apt cache if contrib was just added
+  ansible.builtin.apt:
+    update_cache: true
+  when: contrib_enabled.changed | default(false)
 
 - name: Install Basilisk II via apt
   ansible.builtin.apt:
@@ -16,7 +32,7 @@
   failed_when: false
   changed_when: b2_apt.changed | default(false)
 
-# TODO: Validate the package name on Raspberry Pi OS Bookworm. If
+# TODO: Validate the package name on Raspberry Pi OS Trixie. If
 # 'basilisk2' isn't in the apt repo for the target's architecture,
 # include build-from-source.yml as a fallback (not yet written).
 - name: Verify Basilisk II binary is on PATH
@@ -30,8 +46,9 @@
     msg: |
       Basilisk II (BasiliskII binary) was not found after apt install.
       The 'basilisk2' package may not be available for this distro/arch
-      combination. Options:
-        1. Add a different apt source that ships Basilisk II for aarch64
-        2. Build from source against ../../third_party/infinite-mac/macemu
+      combination, or the 'contrib' component is not enabled. Options:
+        1. Verify /etc/apt/sources.list contains 'contrib' on the main line
+        2. Add a different apt source that ships Basilisk II for aarch64
+        3. Build from source against ../../third_party/infinite-mac/macemu
            (TODO: write the build-from-source tasks)
   when: b2_which.rc != 0
