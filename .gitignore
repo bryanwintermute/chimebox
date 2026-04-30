@@ -41,6 +41,9 @@ roles/*/files/local-*
 pi/ansible/inventory.ini
 pi/ansible/.vault_pass
 
+# Workstation-side ops scripts user-local config
+scripts/config.sh
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
