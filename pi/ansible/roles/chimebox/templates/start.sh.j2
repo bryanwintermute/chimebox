@@ -5,7 +5,8 @@
 # All BasiliskII config (ROM, disks, screen, RAM, model, etc.) lives in
 # ~/.config/BasiliskII/prefs (managed by Ansible, see
 # roles/chimebox/templates/basiliskii-prefs.j2). We just sanity-check
-# that the required files exist before invoking BasiliskII.
+# that the required files exist and prep the X session before invoking
+# BasiliskII.
 
 set -u
 
@@ -28,6 +29,30 @@ for f in "${ROM}" "${SYSTEM_DISK}"; do
         exit 1
     fi
 done
+
+# Force the X display to a sensible mode. Pi 5 + 4K monitor will negotiate
+# 4K by default via EDID, which is overkill for emulator workloads and
+# makes the BasiliskII window look tiny. Pin to 1920x1080 (or whatever
+# group_vars sets) on the connected output.
+target_mode="{{ chimebox_x_display_width }}x{{ chimebox_x_display_height }}"
+connected_output=$(xrandr 2>/dev/null | awk '/ connected/ {print $1; exit}')
+if [ -n "${connected_output}" ]; then
+    if xrandr --output "${connected_output}" --mode "${target_mode}" \
+            >> "${LOG_FILE}" 2>&1; then
+        echo "chimebox: set ${connected_output} to ${target_mode}" \
+            >> "${LOG_FILE}"
+    else
+        echo "chimebox: xrandr failed for ${connected_output} ${target_mode};" \
+             "leaving display as-is" >> "${LOG_FILE}"
+    fi
+else
+    echo "chimebox: no connected output found via xrandr" >> "${LOG_FILE}"
+fi
+
+# Disable host pointer acceleration. With acceleration on, small physical
+# mouse movements get amplified by X before BasiliskII sees them, making
+# the emulated Mac cursor stutter. We want a 1:1 mapping.
+xset m 0 0 >> "${LOG_FILE}" 2>&1 || true
 
 # Hide the host (X) cursor; Basilisk II draws the Mac cursor.
 unclutter -idle 0 -root &

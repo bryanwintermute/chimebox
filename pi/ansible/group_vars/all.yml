@@ -25,6 +25,13 @@ chimebox_library_disk_filename: "InfiniteHD.dsk"
 chimebox_emulator: "BasiliskII"
 chimebox_screen_width: 1024
 chimebox_screen_height: 768
+
+# X display mode (different from chimebox_screen_*, which is the BasiliskII
+# guest screen size). The X server defaults to the monitor's EDID-preferred
+# mode (often 4K on modern monitors), which is overkill and makes the
+# BasiliskII window look tiny. Pin to 1080p by default.
+chimebox_x_display_width: 1920
+chimebox_x_display_height: 1080
 chimebox_ram_mb: 128
 chimebox_modelid: 14             # Quadra 650
 chimebox_cpu: 4                  # 68040
