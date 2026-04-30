@@ -6,7 +6,11 @@
     name:
       - xserver-xorg
       - xserver-xorg-input-libinput
-      - xserver-xorg-video-fbdev   # safe fallback driver
+      # Note: do NOT install xserver-xorg-video-fbdev on Pi 5. The Pi 5
+      # kernel uses KMS/DRM, and the modesetting driver (bundled with
+      # xserver-xorg-core) handles display. fbdev being present causes X
+      # to try framebuffer mode and fail with "Cannot run in framebuffer
+      # mode. Please specify busIDs for all framebuffer devices".
       - xinit
       - x11-xserver-utils
       - unclutter
@@ -14,6 +18,30 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+- name: Remove fbdev driver if it was installed (Pi 5 incompatibility)
+  ansible.builtin.apt:
+    name: xserver-xorg-video-fbdev
+    state: absent
+    autoremove: true
+
+- name: Pin Xorg modesetting driver to Pi 5's display GPU (card1)
+  ansible.builtin.copy:
+    dest: /etc/X11/xorg.conf.d/20-pi5-modesetting.conf
+    mode: "0644"
+    content: |
+      # Managed by chimebox Ansible (kiosk-x role).
+      # Pi 5 exposes two DRM cards: card0 (V3D, 3D acceleration only,
+      # no displays) and card1 (VC6, displays). Without this hint, Xorg
+      # auto-probes card0 first and fails with "No devices detected /
+      # no screens found" even when an HDMI display is connected.
+      Section "OutputClass"
+          Identifier  "Pi 5 Display"
+          MatchDriver "vc4"
+          Driver      "modesetting"
+          Option      "PrimaryGPU" "true"
+          Option      "kmsdev"     "/dev/dri/card1"
+      EndSection
 
 - name: Allow non-root users to start the X server
   ansible.builtin.copy:

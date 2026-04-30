@@ -2,14 +2,10 @@
 # roles/kiosk-user/handlers/main.yml
 
 - name: Reload systemd and restart getty@tty1
-  block:
-    - name: systemctl daemon-reload
-      ansible.builtin.systemd:
-        daemon_reload: true
-    - name: Restart getty@tty1
-      ansible.builtin.systemd:
-        name: getty@tty1.service
-        state: restarted
+  ansible.builtin.systemd:
+    name: getty@tty1.service
+    state: restarted
+    daemon_reload: true
 
 - name: Reload sshd
   ansible.builtin.systemd:

@@ -22,6 +22,12 @@
     group: "{{ chimebox_user }}"
     mode: "0750"
 
+- name: Ensure systemd drop-in directory for getty@tty1
+  ansible.builtin.file:
+    path: /etc/systemd/system/getty@tty1.service.d
+    state: directory
+    mode: "0755"
+
 - name: Configure autologin for chimebox user on tty1
   ansible.builtin.copy:
     dest: /etc/systemd/system/getty@tty1.service.d/autologin.conf
@@ -46,7 +52,14 @@
       # so manual logins as the chimebox user (e.g. via `sudo -iu chimebox`)
       # don't accidentally fire up an X session.
       if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
-          exec startx -- -nocursor
+          if command -v startx >/dev/null 2>&1; then
+              exec startx -- -nocursor
+          else
+              # kiosk-x role hasn't completed yet (e.g. in mid-provisioning).
+              # Sleep instead of letting getty respawn-loop.
+              echo "chimebox: startx not installed yet; waiting." >&2
+              sleep 60
+          fi
       fi
 
 - name: Ensure SSH access to chimebox user is denied
