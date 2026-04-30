@@ -41,18 +41,48 @@ log "Infinite Mac submodule present at ${INFINITE_MAC_DIR}"
 if ! command -v uv >/dev/null 2>&1; then
     log "uv not found, installing..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    # shellcheck disable=SC1091
-    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+    # uv installer writes a PATH-setup script at ~/.local/bin/env; source it
+    # so this same shell can find uv without requiring the user to restart.
+    if [[ -f "$HOME/.local/bin/env" ]]; then
+        # shellcheck disable=SC1091
+        source "$HOME/.local/bin/env"
+    fi
+    if ! command -v uv >/dev/null 2>&1; then
+        # Fall back: try the well-known install path directly.
+        if [[ -x "$HOME/.local/bin/uv" ]]; then
+            export PATH="$HOME/.local/bin:$PATH"
+        fi
+    fi
     if ! command -v uv >/dev/null 2>&1; then
         fail "uv installed but not on PATH. Open a new shell and re-run."
     fi
 fi
 log "uv present ($(uv --version))"
 
-# 5. npm (Infinite Mac uses npm scripts as the entry points)
-if ! command -v npm >/dev/null 2>&1; then
-    fail "npm not found. Install Node.js (e.g. via 'brew install node') and re-run."
-fi
+# 5. node + npm (Infinite Mac uses npm scripts as the entry points).
+#    If Homebrew is present and node isn't, offer to brew-install it.
+ensure_node() {
+    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v brew >/dev/null 2>&1; then
+        log "node/npm not found but Homebrew is. Installing node via brew..."
+        brew install node
+        # brew on Apple Silicon installs to /opt/homebrew/bin; ensure it's on PATH
+        if [[ -d /opt/homebrew/bin ]] && [[ ":$PATH:" != *":/opt/homebrew/bin:"* ]]; then
+            export PATH="/opt/homebrew/bin:$PATH"
+        fi
+    else
+        fail "node/npm not found and Homebrew is not installed.
+Install Node.js via your preferred method (Homebrew: 'brew install node',
+or see https://nodejs.org), then re-run this script."
+    fi
+    if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+        fail "node/npm still not on PATH after install. Open a new shell and re-run."
+    fi
+}
+ensure_node
+log "node present ($(node --version))"
 log "npm present ($(npm --version))"
 
 # 6. Initialize Infinite Mac's *recursive* submodules.
