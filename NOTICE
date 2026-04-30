@@ -1,0 +1,22 @@
+chimebox
+Copyright 2026 the chimebox authors
+
+This product includes software developed by third parties, listed below.
+This NOTICE file is provided for compliance with section 4(d) of the
+Apache License, Version 2.0.
+
+================================================================================
+
+Infinite Mac
+https://github.com/mihaip/infinite-mac
+Copyright (c) Mihai Parparita
+Licensed under the Apache License, Version 2.0.
+
+Portions of chimebox's disk-build pipeline, machine and disk definitions, and
+curated software library manifests are derived from Infinite Mac.
+
+================================================================================
+
+This NOTICE file does not modify the License. Additional attributions for
+software installed on the target device at deploy time (Basilisk II, Mini vMac,
+etc.) are documented in LICENSING.md.

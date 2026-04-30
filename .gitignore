@@ -1,0 +1,74 @@
+# --- chimebox: never commit copyrighted material ---
+# These extensions cover ROMs, disk images, and emulator state.
+*.rom
+*.ROM
+*.dsk
+*.DSK
+*.img
+*.IMG
+*.iso
+*.ISO
+*.hda
+*.HDA
+*.hdv
+*.HDV
+*.toast
+*.TOAST
+*.cdr
+*.CDR
+*.sit
+*.SIT
+*.hqx
+*.HQX
+*.bin
+*.BIN
+*.nvram
+*.pram
+
+# Local-only directories that may hold ROMs, disks, secrets
+disks/local/
+disks/build/
+disks/snapshots/
+secrets/
+*.vault
+.env
+.env.*
+!.env.example
+
+# Ansible
+*.retry
+roles/*/files/local-*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.iml
+
+# Python (for disk-prep tools)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node (if any web tooling sneaks in)
+node_modules/
+npm-debug.log*
+
+# Build outputs
+build/
+dist/
+target/
