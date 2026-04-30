@@ -1,7 +1,7 @@
 ---
 # roles/chimebox/tasks/main.yml
 
-- name: Create chimebox runtime directory tree
+- name: Install chimebox runtime directory tree
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -12,6 +12,16 @@
     - "{{ chimebox_runtime_dir }}"
     - "{{ chimebox_snapshots_dir }}"
     - "{{ chimebox_logs_dir }}"
+    - "{{ chimebox_home }}/.config"
+    - "{{ chimebox_home }}/.config/BasiliskII"
+
+- name: Install BasiliskII prefs
+  ansible.builtin.template:
+    src: basiliskii-prefs.j2
+    dest: "{{ chimebox_home }}/.config/BasiliskII/prefs"
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    mode: "0640"
 
 - name: Install chimebox start.sh
   ansible.builtin.template:

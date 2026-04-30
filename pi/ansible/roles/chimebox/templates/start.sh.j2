@@ -1,6 +1,11 @@
 #!/bin/bash
 # {{ ansible_managed }}
 # chimebox start.sh -- invoked from ~/.xinitrc as the only X client.
+#
+# All BasiliskII config (ROM, disks, screen, RAM, model, etc.) lives in
+# ~/.config/BasiliskII/prefs (managed by Ansible, see
+# roles/chimebox/templates/basiliskii-prefs.j2). We just sanity-check
+# that the required files exist before invoking BasiliskII.
 
 set -u
 
@@ -8,15 +13,13 @@ LOG_DIR="{{ chimebox_logs_dir }}"
 mkdir -p "${LOG_DIR}"
 LOG_FILE="${LOG_DIR}/basiliskii-$(date +%Y%m%d-%H%M%S).log"
 
-# Disk paths
+# Disk paths -- must match the prefs file
 ROM="{{ chimebox_runtime_dir }}/{{ chimebox_rom_filename }}"
 SYSTEM_DISK="{{ chimebox_runtime_dir }}/{{ chimebox_system_disk_filename }}"
-LIBRARY_DISK="{{ chimebox_runtime_dir }}/{{ chimebox_library_disk_filename }}"
 
-# Fail loudly if disks aren't present yet.
-for f in "${ROM}" "${SYSTEM_DISK}" "${LIBRARY_DISK}"; do
+# ROM and System disk are required.
+for f in "${ROM}" "${SYSTEM_DISK}"; do
     if [ ! -f "${f}" ]; then
-        # Log to stdout (which xinit captures) AND a file the admin can pull.
         msg="chimebox: required file missing: ${f}"
         echo "${msg}" >&2
         echo "${msg}" >> "${LOG_FILE}"
@@ -34,23 +37,5 @@ xset s off
 xset -dpms
 xset s noblank
 
-# RAM in bytes (Basilisk II expects bytes via -ramsize)
-RAMSIZE=$(( {{ chimebox_ram_mb }} * 1024 * 1024 ))
-
-# Note: -fpu and -jit flags are emulator build-dependent. The flags below
-# are the most common form used by Debian's basilisk2 package; adjust if
-# your Basilisk II refuses them.
-exec BasiliskII \
-    -rom "${ROM}" \
-    -modelid {{ chimebox_modelid }} \
-    -cpu {{ chimebox_cpu }} \
-{% if chimebox_fpu %}    -fpu true \
-{% endif %}
-{% if chimebox_jit %}    -jit true \
-{% endif %}
-    -ramsize "${RAMSIZE}" \
-    -screen "win/{{ chimebox_screen_width }}/{{ chimebox_screen_height }}" \
-    -fullscreen \
-    -disk "${SYSTEM_DISK}" \
-    -disk "${LIBRARY_DISK}:ro" \
-    >> "${LOG_FILE}" 2>&1
+# Run BasiliskII; all config is in ~/.config/BasiliskII/prefs.
+exec BasiliskII >> "${LOG_FILE}" 2>&1

@@ -1,0 +1,54 @@
+# {{ ansible_managed }}
+# chimebox BasiliskII prefs file.
+#
+# BasiliskII reads this from ~/.config/BasiliskII/prefs by default.
+# Note: BasiliskII may rewrite this file on exit if 'nogui' allowed any
+# settings to change. Ansible re-asserts these values on every run, so
+# any drift is corrected on the next provisioning.
+#
+# Key reference: see basilisk2 source / GUI -- key names come from the
+# C++ prefs framework. The 'screen' format is "win/W/H" or "win/W/H/D"
+# (D = color depth in bits, optional). 'modelid' is Gestalt ID minus 6;
+# 14 = Quadra 650.
+
+rom {{ chimebox_runtime_dir }}/{{ chimebox_rom_filename }}
+disk {{ chimebox_runtime_dir }}/{{ chimebox_system_disk_filename }}
+screen win/{{ chimebox_screen_width }}/{{ chimebox_screen_height }}
+ramsize {{ chimebox_ram_mb * 1024 * 1024 }}
+modelid {{ chimebox_modelid }}
+cpu {{ chimebox_cpu }}
+fpu {{ 'true' if chimebox_fpu else 'false' }}
+jit {{ 'true' if chimebox_jit else 'false' }}
+jitfpu {{ 'true' if chimebox_jit else 'false' }}
+jitcachesize 8192
+jitlazyflush true
+jitinline true
+
+# UI / behavior
+nogui true
+nocdrom true
+nosound false
+noclipconversion false
+idlewait true
+init_grab false
+swap_opt_cmd false
+keyboardtype 5
+mousewheelmode 1
+mousewheellines 3
+
+# Disabled hardware
+seriala
+serialb
+ether
+udptunnel false
+extfs
+
+# Defaults
+bootdrive 0
+bootdriver 0
+frameskip 0
+displaycolordepth 0
+sound_buffer 0
+delay 0
+yearofs 0
+dayofs 0

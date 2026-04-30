@@ -19,12 +19,18 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
 readonly REQUIRED_FILES=(
     "Quadra-650.rom"
     "System.dsk"
+)
+
+# Optional files (InfiniteHD.dsk is the curated library; you can run a
+# perfectly functional kiosk without it for a basic case).
+readonly OPTIONAL_FILES=(
     "InfiniteHD.dsk"
 )
 
 # Validate locally before doing anything network-y
 log_info "Checking local disks/ dir: ${CHIMEBOX_LOCAL_DISKS_DIR}"
 missing=0
+files_to_push=()
 for f in "${REQUIRED_FILES[@]}"; do
     p="${CHIMEBOX_LOCAL_DISKS_DIR}/${f}"
     if [[ ! -f "${p}" ]]; then
@@ -33,6 +39,17 @@ for f in "${REQUIRED_FILES[@]}"; do
     else
         size=$(wc -c < "${p}")
         log_info "  ok: ${f} (${size} bytes)"
+        files_to_push+=("${f}")
+    fi
+done
+for f in "${OPTIONAL_FILES[@]}"; do
+    p="${CHIMEBOX_LOCAL_DISKS_DIR}/${f}"
+    if [[ -f "${p}" ]]; then
+        size=$(wc -c < "${p}")
+        log_info "  ok (optional): ${f} (${size} bytes)"
+        files_to_push+=("${f}")
+    else
+        log_info "  skip (optional, not present): ${f}"
     fi
 done
 
@@ -56,7 +73,7 @@ trap 'chimebox_ssh "rm -rf ${STAGING_DIR}" 2>/dev/null || true' EXIT
 
 # Rsync each file. -P shows progress, --inplace avoids huge temp files.
 log_info "Uploading disks (delta-xfer; only changed bytes are sent)..."
-for f in "${REQUIRED_FILES[@]}"; do
+for f in "${files_to_push[@]}"; do
     chimebox_rsync -avP --inplace \
         "${CHIMEBOX_LOCAL_DISKS_DIR}/${f}" \
         "${CHIMEBOX_ADMIN_USER}@${CHIMEBOX_SSH_HOST}:${STAGING_DIR}/${f}"
@@ -68,12 +85,14 @@ log_info "Installing into ${CHIMEBOX_RUNTIME_DIR} on Pi (sudo password prompt in
 chimebox_ssh_interactive "
     set -euo pipefail
     sudo install -d -o ${CHIMEBOX_USER} -g ${CHIMEBOX_USER} -m 0750 '${CHIMEBOX_RUNTIME_DIR}'
-    for f in ${REQUIRED_FILES[*]}; do
+    for f in ${files_to_push[*]}; do
         sudo install -o ${CHIMEBOX_USER} -g ${CHIMEBOX_USER} -m 0640 \
             '${STAGING_DIR}'/\$f '${CHIMEBOX_RUNTIME_DIR}'/\$f
     done
-    # InfiniteHD.dsk is read-only at runtime; mark it explicitly.
-    sudo chmod 0440 '${CHIMEBOX_RUNTIME_DIR}/InfiniteHD.dsk'
+    # InfiniteHD.dsk (if present) is read-only at runtime; mark it explicitly.
+    if [[ -f '${CHIMEBOX_RUNTIME_DIR}/InfiniteHD.dsk' ]]; then
+        sudo chmod 0440 '${CHIMEBOX_RUNTIME_DIR}/InfiniteHD.dsk'
+    fi
     echo 'Installed:'
     sudo ls -lh '${CHIMEBOX_RUNTIME_DIR}'
 "
