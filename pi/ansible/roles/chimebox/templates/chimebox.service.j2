@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+# Future v2 systemd unit for chimebox kiosk supervision.
+#
+# In v1, the kiosk runs via autologin -> startx (see kiosk-user role).
+# This unit is installed but disabled, ready for v2 when we move to a
+# fully-systemd-supervised X session.
+
+[Unit]
+Description=chimebox kiosk session
+After=multi-user.target
+
+[Service]
+User={{ chimebox_user }}
+PAMName=login
+Type=simple
+ExecStart=/usr/bin/startx -- -nocursor
+Restart=always
+RestartSec=5
+TTYPath=/dev/tty7
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

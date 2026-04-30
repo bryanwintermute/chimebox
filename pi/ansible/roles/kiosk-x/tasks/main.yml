@@ -1,0 +1,29 @@
+---
+# roles/kiosk-x/tasks/main.yml
+
+- name: Install minimal X11 stack
+  ansible.builtin.apt:
+    name:
+      - xserver-xorg
+      - xserver-xorg-input-libinput
+      - xserver-xorg-video-fbdev   # safe fallback driver
+      - xinit
+      - x11-xserver-utils
+      - unclutter
+      - xterm                       # not used but invaluable for debugging
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Allow non-root users to start the X server
+  ansible.builtin.copy:
+    dest: /etc/X11/Xwrapper.config
+    mode: "0644"
+    content: |
+      # Managed by chimebox Ansible (kiosk-x role).
+      # 'anybody' is required so the autologin chimebox user can startx
+      # without sudo; chimebox's only X client is Basilisk II.
+      allowed_users=anybody
+      needs_root_rights=yes
+  # TODO: Verify whether 'needs_root_rights=yes' is required on Pi 5;
+  # depends on how the kernel handles framebuffer access for non-root.

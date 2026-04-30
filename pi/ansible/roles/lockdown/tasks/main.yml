@@ -1,0 +1,34 @@
+---
+# roles/lockdown/tasks/main.yml
+
+- name: Disable VT switching from X (Ctrl-Alt-Fn)
+  ansible.builtin.copy:
+    dest: /etc/X11/xorg.conf.d/10-no-vt-switch.conf
+    mode: "0644"
+    content: |
+      # Managed by chimebox Ansible (lockdown role).
+      Section "ServerFlags"
+          Option "DontVTSwitch" "true"
+          Option "DontZap" "true"
+      EndSection
+  # TODO: Validate that DontVTSwitch is honored on Pi 5 with the modesetting
+  # driver. Some configs ignore it. If so, mask getty@ttyN units explicitly.
+
+- name: Mask unused getty TTYs
+  ansible.builtin.systemd:
+    name: "getty@tty{{ item }}.service"
+    masked: true
+  loop: [2, 3, 4, 5, 6]
+
+- name: Verify chimebox user has no sudoers entries
+  ansible.builtin.shell: |
+    set -o pipefail
+    if grep -rE "^[^#]*\\b{{ chimebox_user }}\\b" /etc/sudoers /etc/sudoers.d 2>/dev/null; then
+        exit 1
+    fi
+    exit 0
+  args:
+    executable: /bin/bash
+  changed_when: false
+  register: chimebox_in_sudoers
+  failed_when: chimebox_in_sudoers.rc != 0

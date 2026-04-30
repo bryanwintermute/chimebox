@@ -1,0 +1,48 @@
+---
+# roles/chimebox/tasks/main.yml
+
+- name: Create chimebox runtime directory tree
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    mode: "0750"
+  loop:
+    - "{{ chimebox_runtime_dir }}"
+    - "{{ chimebox_snapshots_dir }}"
+    - "{{ chimebox_logs_dir }}"
+
+- name: Install chimebox start.sh
+  ansible.builtin.template:
+    src: start.sh.j2
+    dest: "{{ chimebox_runtime_dir }}/start.sh"
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    mode: "0750"
+
+- name: Install chimebox .xinitrc
+  ansible.builtin.template:
+    src: xinitrc.j2
+    dest: "{{ chimebox_home }}/.xinitrc"
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    mode: "0644"
+
+- name: Install chimebox systemd service
+  ansible.builtin.template:
+    src: chimebox.service.j2
+    dest: /etc/systemd/system/chimebox.service
+    mode: "0644"
+  notify: Reload systemd
+
+# Note: we deliberately do NOT enable chimebox.service yet. The user's
+# autologin -> startx pipeline (set up by kiosk-user) is what runs the
+# kiosk in v1. The systemd unit is here as a future supervision wrapper
+# that will replace the autologin path in v2.
+- name: Ensure chimebox.service is disabled in v1
+  ansible.builtin.systemd:
+    name: chimebox.service
+    enabled: false
+    state: stopped
+  failed_when: false

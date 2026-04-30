@@ -1,0 +1,59 @@
+---
+# roles/kiosk-user/tasks/main.yml
+
+- name: Create chimebox user
+  ansible.builtin.user:
+    name: "{{ chimebox_user }}"
+    uid: "{{ chimebox_user_uid }}"
+    groups: "{{ chimebox_user_groups }}"
+    append: false
+    shell: /bin/bash
+    create_home: true
+    home: "{{ chimebox_home }}"
+    state: present
+    password: "!"  # locked password; no interactive login allowed
+    password_lock: true
+
+- name: Ensure chimebox home perms are right
+  ansible.builtin.file:
+    path: "{{ chimebox_home }}"
+    state: directory
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    mode: "0750"
+
+- name: Configure autologin for chimebox user on tty1
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/getty@tty1.service.d/autologin.conf
+    mode: "0644"
+    content: |
+      # Managed by chimebox Ansible (kiosk-user role).
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --autologin {{ chimebox_user }} --noclear %I $TERM
+      Type=simple
+  notify: Reload systemd and restart getty@tty1
+
+- name: Ensure ~/.bash_profile starts X on tty1
+  ansible.builtin.copy:
+    dest: "{{ chimebox_home }}/.bash_profile"
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    mode: "0644"
+    content: |
+      # Managed by chimebox Ansible (kiosk-user role).
+      # On tty1 (the autologin terminal) start X. Anywhere else, do nothing
+      # so manual logins as the chimebox user (e.g. via `sudo -iu chimebox`)
+      # don't accidentally fire up an X session.
+      if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+          exec startx -- -nocursor
+      fi
+
+- name: Ensure SSH access to chimebox user is denied
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config.d/chimebox-deny.conf
+    create: true
+    mode: "0644"
+    line: "DenyUsers {{ chimebox_user }}"
+    regexp: "^DenyUsers"
+  notify: Reload sshd

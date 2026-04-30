@@ -1,0 +1,43 @@
+---
+# group_vars/all.yml -- defaults for all chimebox hosts.
+
+# Identity
+chimebox_user: chimebox
+chimebox_user_uid: 1500          # avoid colliding with default OS users
+chimebox_user_groups:
+  - audio
+  - video
+  - input
+  - tty
+
+# Filesystem layout on the Pi
+chimebox_home: "/home/{{ chimebox_user }}"
+chimebox_runtime_dir: "{{ chimebox_home }}/chimebox"
+chimebox_snapshots_dir: "{{ chimebox_runtime_dir }}/snapshots"
+chimebox_logs_dir: "{{ chimebox_runtime_dir }}/logs"
+
+# Disk image filenames (must match what scripts/push-disks.sh sends)
+chimebox_rom_filename: "Quadra-650.rom"
+chimebox_system_disk_filename: "System.dsk"
+chimebox_library_disk_filename: "InfiniteHD.dsk"
+
+# Emulator runtime parameters
+chimebox_emulator: "BasiliskII"
+chimebox_screen_width: 1024
+chimebox_screen_height: 768
+chimebox_ram_mb: 128
+chimebox_modelid: 14             # Quadra 650
+chimebox_cpu: 4                  # 68040
+chimebox_fpu: true
+chimebox_jit: true
+
+# Persistence / snapshots
+chimebox_snapshot_keep_daily: 7
+chimebox_snapshot_keep_weekly: 4
+chimebox_snapshot_hour: 3        # 03:00 local time
+chimebox_snapshot_minute: 17     # offset from the hour to avoid the rush
+
+# Lockdown toggles (most users want all of these on)
+chimebox_disable_screen_blanking: true
+chimebox_hide_host_cursor: true
+chimebox_disable_usb_boot: false # opt-in; some setups still need USB boot

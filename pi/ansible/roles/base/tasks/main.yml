@@ -1,0 +1,45 @@
+---
+# roles/base/tasks/main.yml
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Apply safe upgrades
+  ansible.builtin.apt:
+    upgrade: safe
+    autoremove: true
+  register: base_upgrade
+
+- name: Install baseline packages
+  ansible.builtin.apt:
+    name:
+      - sudo
+      - ca-certificates
+      - curl
+      - git
+      - rsync
+      - htop
+      - vim
+      - tzdata
+      - unattended-upgrades
+    state: present
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ chimebox_timezone | default('America/Los_Angeles') }}"
+  when: ansible_facts['date_time']['tz'] != (chimebox_timezone | default('America/Los_Angeles'))
+
+- name: Reboot if upgrades require it
+  ansible.builtin.reboot:
+    msg: "Rebooting after base apt upgrades"
+    pre_reboot_delay: 5
+    post_reboot_delay: 30
+    reboot_timeout: 600
+  when:
+    - base_upgrade.changed
+    - ansible_facts['kernel'] is defined
+  # Only reboot if /var/run/reboot-required exists (set by apt when needed)
+  failed_when: false
+  changed_when: false

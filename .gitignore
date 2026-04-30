@@ -38,6 +38,8 @@ secrets/
 # Ansible
 *.retry
 roles/*/files/local-*
+pi/ansible/inventory.ini
+pi/ansible/.vault_pass
 
 # OS / editor cruft
 .DS_Store

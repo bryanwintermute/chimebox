@@ -1,0 +1,65 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# chimebox-reset -- restore System.dsk from a snapshot.
+# Usage:
+#   chimebox-reset list
+#   chimebox-reset latest                         # most recent snapshot
+#   chimebox-reset <snapshot-filename-in-snap-dir>
+
+set -euo pipefail
+
+RUNTIME_DIR="{{ chimebox_runtime_dir }}"
+SNAP_DIR="{{ chimebox_snapshots_dir }}"
+SYSTEM_DISK="${RUNTIME_DIR}/{{ chimebox_system_disk_filename }}"
+
+usage() {
+    cat <<EOF
+Usage:
+    chimebox-reset list
+    chimebox-reset latest
+    chimebox-reset <snapshot-filename>
+
+Examples:
+    chimebox-reset list
+    chimebox-reset latest
+    chimebox-reset daily-2026-04-25.dsk
+EOF
+    exit 2
+}
+
+[ $# -ge 1 ] || usage
+
+case "$1" in
+    list)
+        echo "Snapshots in ${SNAP_DIR}:"
+        ls -lh "${SNAP_DIR}" 2>/dev/null | tail -n +2 || echo "  (none)"
+        ;;
+    latest)
+        SNAP="$(ls -1t "${SNAP_DIR}"/*.dsk 2>/dev/null | head -1 || true)"
+        if [ -z "${SNAP}" ]; then
+            echo "No snapshots found in ${SNAP_DIR}" >&2
+            exit 1
+        fi
+        echo "Restoring from: ${SNAP}"
+        echo "(Stop the kiosk first if it's running, e.g. 'systemctl stop chimebox' or kill BasiliskII)"
+        cp --reflink=auto "${SNAP}" "${SYSTEM_DISK}.tmp"
+        mv "${SYSTEM_DISK}.tmp" "${SYSTEM_DISK}"
+        chown "{{ chimebox_user }}:{{ chimebox_user }}" "${SYSTEM_DISK}"
+        echo "chimebox-reset: restored ${SYSTEM_DISK}"
+        ;;
+    -h|--help)
+        usage
+        ;;
+    *)
+        SNAP="${SNAP_DIR}/$1"
+        if [ ! -f "${SNAP}" ]; then
+            echo "No such snapshot: ${SNAP}" >&2
+            exit 1
+        fi
+        echo "Restoring from: ${SNAP}"
+        cp --reflink=auto "${SNAP}" "${SYSTEM_DISK}.tmp"
+        mv "${SYSTEM_DISK}.tmp" "${SYSTEM_DISK}"
+        chown "{{ chimebox_user }}:{{ chimebox_user }}" "${SYSTEM_DISK}"
+        echo "chimebox-reset: restored ${SYSTEM_DISK}"
+        ;;
+esac

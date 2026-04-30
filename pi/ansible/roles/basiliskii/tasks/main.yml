@@ -1,0 +1,37 @@
+---
+# roles/basiliskii/tasks/main.yml
+
+# Strategy: try apt first; if it fails, build from source.
+# (For v1 we assume apt works on Raspberry Pi OS Bookworm aarch64.)
+
+- name: Install Basilisk II via apt
+  ansible.builtin.apt:
+    name:
+      - basilisk2     # the emulator itself
+      - libsdl2-2.0-0 # runtime, in case the package doesn't pull it
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  register: b2_apt
+  failed_when: false
+  changed_when: b2_apt.changed | default(false)
+
+# TODO: Validate the package name on Raspberry Pi OS Bookworm. If
+# 'basilisk2' isn't in the apt repo for the target's architecture,
+# include build-from-source.yml as a fallback (not yet written).
+- name: Verify Basilisk II binary is on PATH
+  ansible.builtin.command: which BasiliskII
+  register: b2_which
+  changed_when: false
+  failed_when: false
+
+- name: Fail with a helpful message if Basilisk II isn't available
+  ansible.builtin.fail:
+    msg: |
+      Basilisk II (BasiliskII binary) was not found after apt install.
+      The 'basilisk2' package may not be available for this distro/arch
+      combination. Options:
+        1. Add a different apt source that ships Basilisk II for aarch64
+        2. Build from source against ../../third_party/infinite-mac/macemu
+           (TODO: write the build-from-source tasks)
+  when: b2_which.rc != 0

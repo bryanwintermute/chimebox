@@ -1,0 +1,26 @@
+---
+# roles/persistence/tasks/main.yml
+
+- name: Install chimebox-snapshot helper
+  ansible.builtin.template:
+    src: chimebox-snapshot.j2
+    dest: /usr/local/sbin/chimebox-snapshot
+    mode: "0750"
+    owner: root
+    group: "{{ chimebox_user }}"
+
+- name: Install chimebox-reset helper
+  ansible.builtin.template:
+    src: chimebox-reset.j2
+    dest: /usr/local/sbin/chimebox-reset
+    mode: "0750"
+    owner: root
+    group: "{{ chimebox_user }}"
+
+- name: Install daily snapshot cron
+  ansible.builtin.cron:
+    name: chimebox daily snapshot
+    user: root
+    hour: "{{ chimebox_snapshot_hour }}"
+    minute: "{{ chimebox_snapshot_minute }}"
+    job: "/usr/local/sbin/chimebox-snapshot daily"

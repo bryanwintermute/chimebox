@@ -1,0 +1,58 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# chimebox-snapshot -- snapshot the kiosk System.dsk.
+# Usage: chimebox-snapshot [daily|weekly|manual]
+
+set -euo pipefail
+
+KIND="${1:-manual}"
+RUNTIME_DIR="{{ chimebox_runtime_dir }}"
+SNAP_DIR="{{ chimebox_snapshots_dir }}"
+SOURCE="${RUNTIME_DIR}/{{ chimebox_system_disk_filename }}"
+KEEP_DAILY={{ chimebox_snapshot_keep_daily }}
+KEEP_WEEKLY={{ chimebox_snapshot_keep_weekly }}
+
+if [ ! -f "${SOURCE}" ]; then
+    echo "chimebox-snapshot: nothing to snapshot ($SOURCE missing)" >&2
+    exit 0
+fi
+
+mkdir -p "${SNAP_DIR}"
+
+case "${KIND}" in
+    daily)   PREFIX="daily";   STAMP="$(date +%Y-%m-%d)";;
+    weekly)  PREFIX="weekly";  STAMP="$(date +%Y-W%V)";;
+    manual)  PREFIX="manual";  STAMP="$(date +%Y-%m-%d-%H%M%S)";;
+    *)       echo "unknown kind: ${KIND}" >&2; exit 2;;
+esac
+
+DEST="${SNAP_DIR}/${PREFIX}-${STAMP}.dsk"
+
+# Use cp --reflink=auto if the filesystem supports it (instant, COW),
+# otherwise fall back to a regular copy.
+cp --reflink=auto "${SOURCE}" "${DEST}.tmp"
+mv "${DEST}.tmp" "${DEST}"
+chown "{{ chimebox_user }}:{{ chimebox_user }}" "${DEST}"
+chmod 0640 "${DEST}"
+
+echo "chimebox-snapshot: wrote ${DEST}"
+
+# Trim old snapshots
+case "${KIND}" in
+    daily)
+        ls -1t "${SNAP_DIR}"/daily-*.dsk 2>/dev/null \
+            | tail -n +$((KEEP_DAILY + 1)) \
+            | xargs -r rm -f
+        ;;
+    weekly)
+        ls -1t "${SNAP_DIR}"/weekly-*.dsk 2>/dev/null \
+            | tail -n +$((KEEP_WEEKLY + 1)) \
+            | xargs -r rm -f
+        ;;
+esac
+
+# If today is the configured weekly day, also take a weekly snapshot.
+# Default: Sunday (date +%u == 7). Make this configurable later if needed.
+if [ "${KIND}" = "daily" ] && [ "$(date +%u)" = "7" ]; then
+    "$0" weekly
+fi

@@ -1,0 +1,56 @@
+---
+# playbook.yml -- top-level chimebox provisioning playbook.
+#
+# Run from your workstation:
+#   ansible-playbook -i inventory.ini playbook.yml
+#
+# All roles are idempotent. Re-running is safe and a quick no-op when nothing
+# has drifted.
+
+- name: Provision chimebox
+  hosts: chimebox
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Sanity check -- target is a Raspberry Pi running aarch64 Linux
+      ansible.builtin.assert:
+        that:
+          - ansible_architecture == "aarch64"
+          - ansible_system == "Linux"
+        fail_msg: >-
+          chimebox targets aarch64 Linux (e.g. Raspberry Pi OS 64-bit on
+          a Pi 4/5). Detected {{ ansible_system }} {{ ansible_architecture }}.
+
+    - name: Sanity check -- Debian-family distro (Raspberry Pi OS)
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: >-
+          chimebox is built around apt-based distros. Detected {{ ansible_os_family }}.
+
+  roles:
+    - role: base
+      tags: [base]
+    - role: kiosk-user
+      tags: [kiosk-user, user]
+    - role: basiliskii
+      tags: [basiliskii, emulator]
+    - role: kiosk-x
+      tags: [kiosk-x, x11, display]
+    - role: chimebox
+      tags: [chimebox, runtime]
+    - role: persistence
+      tags: [persistence, snapshots]
+    - role: lockdown
+      tags: [lockdown, security]
+
+  post_tasks:
+    - name: Print next steps
+      ansible.builtin.debug:
+        msg:
+          - "Provisioning complete on {{ inventory_hostname }}."
+          - ""
+          - "Next steps from your workstation:"
+          - "  1. Push prepared disks: ../../scripts/push-disks.sh"
+          - "  2. Reboot the Pi (it should come up in the chimebox kiosk)"

@@ -1,0 +1,4 @@
+#!{{ '/bin/sh' }}
+# {{ ansible_managed }}
+# chimebox .xinitrc -- minimal X session. start.sh is the only X client.
+exec {{ chimebox_runtime_dir }}/start.sh
