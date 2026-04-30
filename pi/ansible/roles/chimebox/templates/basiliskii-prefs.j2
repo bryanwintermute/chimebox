@@ -18,23 +18,45 @@ ramsize {{ chimebox_ram_mb * 1024 * 1024 }}
 modelid {{ chimebox_modelid }}
 cpu {{ chimebox_cpu }}
 fpu {{ 'true' if chimebox_fpu else 'false' }}
-jit {{ 'true' if chimebox_jit else 'false' }}
-jitfpu {{ 'true' if chimebox_jit else 'false' }}
-jitcachesize 8192
-jitlazyflush true
-jitinline true
+
+# JIT on aarch64: BasiliskII's JIT was historically x86-only. Modern
+# aarch64 builds either fall back to interpreter or have buggy behavior
+# when JIT is requested. Default OFF on Pi; the interpreter is fast
+# enough on Pi 5 for our workload (Mac OS 8.1 is single-digit-MHz era).
+jit false
+jitfpu false
+jitdebug false
+jitcachesize 0
+jitlazyflush false
+jitinline false
 
 # UI / behavior
 nogui true
 nocdrom true
 nosound false
 noclipconversion false
-idlewait true
-init_grab false
+# idlewait: when true, BasiliskII sleeps when the emulated Mac is idle.
+# That sounds nice for power but introduces noticeable cursor stutter
+# (sleep -> wake on input -> redraw). Default OFF for chimebox; the
+# Pi has plenty of headroom and we'd rather have smooth interaction.
+idlewait false
+# init_grab: if true, BasiliskII captures the host pointer inside its
+# window and uses relative-motion deltas. If false, it uses absolute
+# coordinates from X. On modern X with a high-DPI mouse, absolute mode
+# can produce 'cursor all over the place' behavior because of how
+# coordinate scaling and SDL2 motion events interact. Grab mode is the
+# canonical emulator setup and also a feature for kiosk use: the
+# cursor cannot leave the Mac screen.
+init_grab true
 swap_opt_cmd false
 keyboardtype 5
 mousewheelmode 1
 mousewheellines 3
+# SDL renderer: 'software' is recommended by BasiliskII --help as
+# possibly faster for emulator workloads. The 'auto' default can pick
+# a hardware-accelerated renderer that adds latency for the small
+# blits we do. Worth keeping on 'software' until proven otherwise.
+sdlrender software
 
 # Disabled hardware
 seriala

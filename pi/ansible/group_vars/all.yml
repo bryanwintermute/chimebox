@@ -36,7 +36,11 @@ chimebox_ram_mb: 128
 chimebox_modelid: 14             # Quadra 650
 chimebox_cpu: 4                  # 68040
 chimebox_fpu: true
-chimebox_jit: true
+# JIT was historically x86-only in BasiliskII; on aarch64 the build
+# falls back to interpreter even when JIT is requested, and asking for
+# JIT may add overhead. Default off on Pi; Pi 5 has plenty of headroom
+# for interpretive 68040 emulation of Mac OS 8.1.
+chimebox_jit: false
 
 # Persistence / snapshots
 chimebox_snapshot_keep_daily: 7
