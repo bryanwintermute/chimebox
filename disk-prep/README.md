@@ -38,12 +38,46 @@ chimebox/
     ├── 1-build-library.sh   ← runs Infinite Mac's import-library
     ├── 2-build-disks.sh     ← runs Infinite Mac's import-disks
     ├── 3-collect.sh         ← copies outputs into ../disks/
-    └── prep.sh              ← runs steps 0-3 end-to-end
+    ├── prep.sh              ← runs steps 0-3 end-to-end (full pipeline)
+    ├── 4-fetch-cdn.sh       ← FAST PATH: fetch from infinitemac.org
+    ├── fetch-from-cdn.py    ← the Python fetcher (used by 4-fetch-cdn.sh)
+    └── reassemble_chunked.py
 ```
 
-The numbered scripts can be run individually for development; `prep.sh` is
-the convenience top-level. Each script is idempotent — re-running won't
-re-do work that's already done.
+There are **two paths** to producing chimebox disk images, with
+different trade-offs:
+
+### Fast path (recommended): `4-fetch-cdn.sh`
+
+Fetches pre-built chunks from `infinitemac.org`'s CDN and reassembles
+them locally. Result: byte-identical disk images to what the upstream
+pipeline would produce, in ~10 minutes instead of ~1.5 hours, with no
+GUI emulator dance.
+
+```sh
+./disk-prep/4-fetch-cdn.sh
+# Outputs to ../disks/{System.dsk, InfiniteHD.dsk}
+```
+
+Use this unless you need to customize the disk image at build time
+(in which case use the full pipeline below).
+
+### Full pipeline: `prep.sh`
+
+Runs Infinite Mac's `import-library` + `import-disks` locally,
+including the Macintosh Garden library download and the GUI emulator
+desktop-database rebuild. ~1.5 hours; needs ~5 minutes of GUI
+clicking partway through. Required if you want to modify the disk
+image while it's being built.
+
+```sh
+./disk-prep/prep.sh
+# (Will prompt you about the GUI emulator step partway through.)
+```
+
+The numbered scripts (0-bootstrap.sh, 1-build-library.sh,
+2-build-disks.sh, 3-collect.sh) can also be run individually for
+development; each is idempotent.
 
 ## Quickstart
 
@@ -56,15 +90,20 @@ git submodule update --init third_party/infinite-mac
 # See "Obtaining the ROM" below.
 
 cd disk-prep
+
+# FAST path (recommended; ~10 min):
+./4-fetch-cdn.sh
+
+# OR full pipeline (slow but customizable; ~1.5h):
 ./prep.sh
 ```
 
-After `prep.sh` finishes you should have:
+After the chosen path finishes you should have:
 
 ```
 disks/
 ├── Quadra-650.rom        (yours)
-├── System.dsk            (stock Mac OS 8.1)
+├── System.dsk            (Mac OS 8.1)
 └── InfiniteHD.dsk        (curated library)
 ```
 

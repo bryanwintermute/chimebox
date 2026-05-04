@@ -205,6 +205,21 @@ Bigger-than-v1 items that need design.
 
 Items that move chimebox from "personal project" to "publishable".
 
+- [ ] **Vendor or self-host disk-image chunks**: `disk-prep/4-fetch-cdn.sh`
+      currently fetches chunks from `infinitemac.org`. Fine for a
+      personal project; for the public OSS release we should not
+      implicitly pin every chimebox user to Mihai's R2 bandwidth.
+      Three approaches:
+        - Vendor a snapshot of chunks into our own GitHub releases
+          (~1-2GB, doable). Pin to a specific upstream commit.
+        - Build our own scope-able pipeline that produces only what
+          we want (subset of system disks + customizable Infinite HD).
+          More work; gives full control.
+        - Document the dependency clearly and let users opt in to
+          either upstream-fetch or self-build.
+      Probably the right answer is option 3 default with option 1
+      as a CI-built fallback.
+
 - [ ] **Linux/Docker disk-prep path**: remove macOS dependency in
       `disk-prep/`. The hard part is the desktop-DB rebuild step
       that currently calls native `MiniVMac.app`/`BasiliskII.app`.
