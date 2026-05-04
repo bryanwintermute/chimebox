@@ -244,3 +244,9 @@ A non-exhaustive trail of major milestones:
   playbook (37 tasks, 0 failed), disks pushed via real
   push-disks.sh (first end-to-end run), Mac OS 8.1 booted cleanly.
   Active cooler also validated: 56°C → 43°C under load.
+- ✅ Argon One V3 role with sha256-pinned upstream sources, opt-in via
+  `chimebox_argon_one_v3`, fan curve via `chimebox_argon_fan_curve`,
+  validated audibly via i2cset A/B/C test (`2b1913a`)
+- ✅ EEPROM config tweaks for Argon One V3 applied idempotently
+  (`6d1098d`): POWER_OFF_ON_HALT=1, WAKE_ON_GPIO=0, BOOT_ORDER=0xf416,
+  PCIE_PROBE=1. Validated post-reboot.
