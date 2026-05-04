@@ -250,3 +250,11 @@ A non-exhaustive trail of major milestones:
 - ✅ EEPROM config tweaks for Argon One V3 applied idempotently
   (`6d1098d`): POWER_OFF_ON_HALT=1, WAKE_ON_GPIO=0, BOOT_ORDER=0xf416,
   PCIE_PROBE=1. Validated post-reboot.
+- ✅ PiKVM remote-pointer support fixed (`96d87ed`): replaced classic
+  unclutter with unclutter-xfixes (the polling unclutter interferes
+  with SDL2 motion-event delivery), added SDL2 hints
+  (SDL_MOUSE_FOCUS_CLICKTHROUGH=1, SDL_VIDEO_X11_XINPUT2=1), added
+  matchbox-window-manager. Display profile abstracted into
+  chimebox_display_profile var with three named profiles
+  (pillarbox / matched-stretched / native-sharp). chimebox-dev's
+  host_vars overrides to matched-stretched for PiKVM compatibility.
