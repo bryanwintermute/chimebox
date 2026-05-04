@@ -32,8 +32,9 @@ done
 
 # Force the X display to a sensible mode. Pi 5 + 4K monitor will negotiate
 # 4K by default via EDID, which is overkill for emulator workloads and
-# makes the BasiliskII window look tiny. Pin to 1920x1080 (or whatever
-# group_vars sets) on the connected output.
+# makes the BasiliskII window look tiny. Pin to the size in
+# chimebox_x_display_width x chimebox_x_display_height (see
+# group_vars/all.yml for the three common profiles).
 target_mode="{{ chimebox_x_display_width }}x{{ chimebox_x_display_height }}"
 connected_output=$(xrandr 2>/dev/null | awk '/ connected/ {print $1; exit}')
 if [ -n "${connected_output}" ]; then
@@ -61,6 +62,15 @@ unclutter -idle 0 -root &
 xset s off
 xset -dpms
 xset s noblank
+
+# Center the Basilisk II window inside the X canvas. Only meaningful when
+# the emulator's screen size is smaller than the X display (e.g. a 4:3
+# 1440x1080 emulator inside a 16:9 1920x1080 X canvas, with pillarbox
+# black bars on the left and right). Without this, SDL pins the window
+# top-left and the bars all end up on the right.
+{% if chimebox_center_window %}
+export SDL_VIDEO_CENTERED=1
+{% endif %}
 
 # Run BasiliskII; all config is in ~/.config/BasiliskII/prefs.
 exec BasiliskII >> "${LOG_FILE}" 2>&1
