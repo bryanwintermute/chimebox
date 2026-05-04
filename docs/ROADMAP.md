@@ -189,5 +189,12 @@ A non-exhaustive trail of major milestones:
 - ✅ Mac OS 8.1 booting on Pi 5 (`a126ea2`)
 - ✅ Display + mouse polish for the dev display: 1024x768 host,
   init_grab capture mode (`5f068f5`, `25afe22`, `99051d9`)
-- ✅ 4:3 pillarboxed at 1440x1080 in 1920x1080 X (later session,
-  see commit log)
+- ✅ Pi Imager APFS-on-target gotcha documented in pi/SETUP.md
+  (`8462da5`)
+- ✅ Display profile configurable; pillarbox 4:3 is the new default,
+  with stretched-fullscreen and native-sharp as documented
+  alternatives (`43557b7`)
+- ✅ NVMe migration: re-flashed, re-provisioned via the same Ansible
+  playbook (37 tasks, 0 failed), disks pushed via real
+  push-disks.sh (first end-to-end run), Mac OS 8.1 booted cleanly.
+  Active cooler also validated: 56°C → 43°C under load.
