@@ -33,3 +33,21 @@ chimebox_argon_files:
   - dest: argonpowerbutton.py
     url: argonpowerbutton-libgpiod.py
     sha256: 14d44370b59e6b46d601a0fb455b07da36b1af1c84b2089427b7c83ba6c0ddc9
+
+# EEPROM bootloader config tweaks recommended by Argon for the V3 case.
+# Default true when chimebox_argon_one_v3 itself is true; users can
+# override per-host. The tweaks are:
+#   POWER_OFF_ON_HALT=1   `sudo poweroff` actually cuts power (vs. idle hot)
+#   WAKE_ON_GPIO=0        only the case power button wakes the Pi
+#   BOOT_ORDER per chimebox_argon_boot_order (NVMe-first by default)
+#   PCIE_PROBE=1          bootloader actively probes PCIe for the NVMe HAT
+# Reversible: rerun with this set false (then re-edit the EEPROM
+# manually if you want to revert), or use `sudo rpi-eeprom-config --edit`.
+chimebox_argon_apply_eeprom_tweaks: true
+
+# Boot order. 0xf416 = NVMe, then SD, then USB, then network. Best for a
+# Pi 5 booting from NVMe. Other notable values:
+#   0xf461  default Pi OS  (SD, NVMe, USB, network)
+#   0xf41   NVMe, SD, USB    (skips network)
+#   0xf164  USB, SD, NVMe, network
+chimebox_argon_boot_order: "0xf416"

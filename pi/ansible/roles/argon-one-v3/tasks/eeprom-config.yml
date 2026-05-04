@@ -1,0 +1,89 @@
+---
+# roles/argon-one-v3/tasks/eeprom-config.yml
+#
+# Apply Argon-recommended Pi 5 bootloader EEPROM config tweaks.
+#
+# Idempotent: reads the current config with rpi-eeprom-config, computes
+# the desired config, only writes if they differ. Changes apply on next
+# boot.
+#
+# Reversible: changes are just bootloader config keys. To revert, run
+# 'sudo rpi-eeprom-config --edit' and restore the prior values, or
+# disable this task and reboot.
+
+- name: Read current EEPROM config
+  ansible.builtin.command: rpi-eeprom-config
+  register: argon_eeprom_current
+  changed_when: false
+  check_mode: false  # Always read, even under --check, so the diff is honest
+
+- name: Compute desired EEPROM config
+  ansible.builtin.set_fact:
+    argon_eeprom_desired_lines:
+      - "[all]"
+      - "BOOT_UART=1"
+      - "WAKE_ON_GPIO=0"
+      - "POWER_OFF_ON_HALT=1"
+      - "BOOT_ORDER={{ chimebox_argon_boot_order }}"
+      - "PCIE_PROBE=1"
+
+- name: Determine if EEPROM config needs updating
+  ansible.builtin.set_fact:
+    argon_eeprom_needs_update: >-
+      {{
+        argon_eeprom_desired_lines
+        | reject('equalto', '[all]')
+        | map('regex_replace', '^([^=]+)=.*$', '\\1')
+        | difference(
+            argon_eeprom_current.stdout_lines
+            | map('regex_replace', '^([^=]+)=.*$', '\\1')
+          )
+        | length > 0
+        or
+        argon_eeprom_desired_lines
+        | difference(argon_eeprom_current.stdout_lines)
+        | reject('equalto', '[all]')
+        | length > 0
+      }}
+
+- name: Show planned EEPROM config diff
+  ansible.builtin.debug:
+    msg:
+      - "Current EEPROM config:"
+      - "{{ argon_eeprom_current.stdout_lines }}"
+      - "Desired EEPROM config:"
+      - "{{ argon_eeprom_desired_lines }}"
+      - "Update needed: {{ argon_eeprom_needs_update }}"
+
+- name: Apply EEPROM config (only if changed)
+  when: argon_eeprom_needs_update
+  block:
+    - name: Write desired EEPROM config to a temp file
+      ansible.builtin.copy:
+        dest: /tmp/chimebox-eeprom.conf
+        content: |
+          {% for line in argon_eeprom_desired_lines -%}
+          {{ line }}
+          {% endfor %}
+        mode: "0644"
+
+    - name: Apply EEPROM config
+      ansible.builtin.command: rpi-eeprom-config --apply /tmp/chimebox-eeprom.conf
+      register: argon_eeprom_apply
+      changed_when: true
+
+    - name: Show apply result
+      ansible.builtin.debug:
+        msg: "{{ argon_eeprom_apply.stdout_lines | default([]) }}"
+
+    - name: Remove temp file
+      ansible.builtin.file:
+        path: /tmp/chimebox-eeprom.conf
+        state: absent
+
+    - name: Note that a reboot is required for EEPROM changes to take effect
+      ansible.builtin.debug:
+        msg: |-
+          EEPROM config has been written. Changes take effect on next boot.
+          The bootloader image itself is untouched; only its config was updated.
+          Reboot the Pi when convenient.
