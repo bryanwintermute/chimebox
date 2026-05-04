@@ -56,12 +56,33 @@ fi
 xset m 0 0 >> "${LOG_FILE}" 2>&1 || true
 
 # Hide the host (X) cursor; Basilisk II draws the Mac cursor.
-unclutter -idle 0 -root &
+# Use unclutter-xfixes (NOT classic unclutter): the classic version
+# polls X and calls XDefineCursor on root windows, which interferes
+# with SDL2's pointer-event subscription and breaks remote-pointer
+# setups (PiKVM, VNC) -- motion events stop reaching the emulator
+# unless a button is held. unclutter-xfixes uses the XFixes extension
+# passively and doesn't have that issue.
+unclutter-xfixes --hide-on-touch &
+
+# Tiny window manager for proper SDL2 focus handling. Without a WM,
+# SDL windows can have weird focus semantics; matchbox-window-manager
+# is the canonical kiosk WM (~5MB, no UI of its own).
+matchbox-window-manager -use_titlebar no -use_cursor no &
+sleep 1  # let it claim WM ownership before B2 starts
 
 # Disable screen blanking/DPMS.
 xset s off
 xset -dpms
 xset s noblank
+
+# SDL2 hints for remote-pointer compatibility (PiKVM, VNC, tablets):
+# - SDL_MOUSE_FOCUS_CLICKTHROUGH: deliver clicks to the SDL window even
+#   when it doesn't have host pointer focus. Helps when there's no WM
+#   doing focus-follows-mouse.
+# - SDL_VIDEO_X11_XINPUT2: prefer the XInput2 protocol for pointer
+#   events. (Already default in modern SDL2 but safe to be explicit.)
+export SDL_MOUSE_FOCUS_CLICKTHROUGH=1
+export SDL_VIDEO_X11_XINPUT2=1
 
 # Center the Basilisk II window inside the X canvas. Only meaningful when
 # the emulator's screen size is smaller than the X display (e.g. a 4:3

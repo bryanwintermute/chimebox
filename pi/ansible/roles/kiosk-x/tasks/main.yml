@@ -13,7 +13,17 @@
       # mode. Please specify busIDs for all framebuffer devices".
       - xinit
       - x11-xserver-utils
-      - unclutter
+      # unclutter-xfixes (NOT classic unclutter): the classic version
+      # polls X with XQueryPointer and calls XDefineCursor on root
+      # windows, which interferes with SDL2's pointer-event subscription
+      # and breaks remote-pointer setups (PiKVM, VNC) where motion-only
+      # events stop reaching emulators. unclutter-xfixes uses the XFixes
+      # extension to passively hide cursors and doesn't have this issue.
+      - unclutter-xfixes
+      # matchbox-window-manager: tiny kiosk WM. Provides proper window
+      # focus management for SDL apps; without a WM, SDL windows can
+      # have weird focus semantics. ~5MB installed, no UI.
+      - matchbox-window-manager
       - xterm                       # not used but invaluable for debugging
     state: present
     update_cache: true
@@ -22,6 +32,12 @@
 - name: Remove fbdev driver if it was installed (Pi 5 incompatibility)
   ansible.builtin.apt:
     name: xserver-xorg-video-fbdev
+    state: absent
+    autoremove: true
+
+- name: Remove classic unclutter if present (replaced by unclutter-xfixes)
+  ansible.builtin.apt:
+    name: unclutter
     state: absent
     autoremove: true
 

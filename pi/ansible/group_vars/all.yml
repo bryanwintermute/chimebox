@@ -24,58 +24,64 @@ chimebox_library_disk_filename: "InfiniteHD.dsk"
 # Emulator
 chimebox_emulator: "BasiliskII"
 
-# Display configuration.
+# Display profile. Pick one of:
+#   "pillarbox" -- 1920x1080 X canvas, 1440x1080 BasiliskII window
+#                  centered with black bars on a 16:9 monitor.
+#                  Undistorted Mac, sharp pixels. Best general default.
+#                  Uses init_grab=true (relative-mouse capture). Best
+#                  for physical mouse / kiosk use; the cursor cannot
+#                  leave the Mac screen.
+#                  *** Does NOT work with PiKVM/VNC remote pointers ***
+#                  because the pillarbox creates a window/canvas size
+#                  mismatch and absolute coords don't map cleanly.
 #
-# Three common modes work well; pick by overriding the four variables
-# below. Default is 'pillarbox' which is the best general choice for a
-# modern 16:9 monitor.
+#   "matched-stretched" -- 1024x768 X canvas, 1024x768 BasiliskII window
+#                  matched. The monitor's hardware scaler stretches to
+#                  fill native resolution; on 16:9 monitors this is
+#                  horizontally distorted. Period-authentic chunky
+#                  pixels. Uses init_grab=false (absolute pointer).
+#                  *** Required for PiKVM/VNC use *** (no offset
+#                  between X canvas and emulator window).
 #
-#   1. PILLARBOX (default).
-#      X canvas at 1920x1080 (the monitor's likely native), Basilisk II
-#      guest at 1440x1080 (4:3) centered. Result: undistorted Mac
-#      screen with black bars on left/right. Sharp pixels, correct
-#      aspect, kid-friendly UI sizing.
-#         chimebox_x_display_width: 1920
-#         chimebox_x_display_height: 1080
-#         chimebox_screen_width: 1440
-#         chimebox_screen_height: 1080
-#         chimebox_center_window: true
+#   "native-sharp" -- 1920x1080 X canvas, 1920x1080 BasiliskII window
+#                  matched. Edge-to-edge, sharp, but Mac OS 8.1 menus
+#                  and icons end up small. Probably not what you want
+#                  for a 6.5-year-old.
 #
-#   2. STRETCHED FULLSCREEN (period-authentic).
-#      X canvas and Basilisk II both at 1024x768. The monitor's hardware
-#      scaler stretches to fill its native resolution. On 16:9 monitors
-#      this distorts horizontally (Mac windows look wide). Some people
-#      prefer this for the chunky big-pixel feel; for kid use on 16:9 the
-#      pillarbox above is usually nicer.
-#         chimebox_x_display_width: 1024
-#         chimebox_x_display_height: 768
-#         chimebox_screen_width: 1024
-#         chimebox_screen_height: 768
-#         chimebox_center_window: false
-#
-#   3. NATIVE SHARP.
-#      X and Basilisk II both at 1920x1080 (or whatever the monitor's
-#      native is). Edge to edge, sharp, but Mac OS 8.1 menus and icons
-#      end up small on a large screen. Probably not what you want for
-#      a 6.5-year-old; fine for an adult tinker session.
-#         chimebox_x_display_width: 1920
-#         chimebox_x_display_height: 1080
-#         chimebox_screen_width: 1920
-#         chimebox_screen_height: 1080
-#         chimebox_center_window: false
+# Override per-host in host_vars/<hostname>.yml.
+chimebox_display_profile: pillarbox
 
-# X display canvas size (set via xrandr at session start)
-chimebox_x_display_width: 1920
-chimebox_x_display_height: 1080
+# Derived display values; override directly to break out of the
+# profiles, e.g. for a non-1080p monitor.
+_chimebox_display_profiles:
+  pillarbox:
+    x_display_width: 1920
+    x_display_height: 1080
+    screen_width: 1440
+    screen_height: 1080
+    center_window: true
+    init_grab: true
+  matched-stretched:
+    x_display_width: 1024
+    x_display_height: 768
+    screen_width: 1024
+    screen_height: 768
+    center_window: false
+    init_grab: false
+  native-sharp:
+    x_display_width: 1920
+    x_display_height: 1080
+    screen_width: 1920
+    screen_height: 1080
+    center_window: false
+    init_grab: false
 
-# Basilisk II guest screen size (written into ~/.config/BasiliskII/prefs)
-chimebox_screen_width: 1440
-chimebox_screen_height: 1080
-
-# When the Basilisk II window is smaller than the X canvas, center it
-# inside the canvas via SDL_VIDEO_CENTERED. Only meaningful when the
-# emulator window != display size (i.e. profile 1 above).
-chimebox_center_window: true
+chimebox_x_display_width: "{{ _chimebox_display_profiles[chimebox_display_profile].x_display_width }}"
+chimebox_x_display_height: "{{ _chimebox_display_profiles[chimebox_display_profile].x_display_height }}"
+chimebox_screen_width: "{{ _chimebox_display_profiles[chimebox_display_profile].screen_width }}"
+chimebox_screen_height: "{{ _chimebox_display_profiles[chimebox_display_profile].screen_height }}"
+chimebox_center_window: "{{ _chimebox_display_profiles[chimebox_display_profile].center_window }}"
+chimebox_init_grab: "{{ _chimebox_display_profiles[chimebox_display_profile].init_grab }}"
 
 chimebox_ram_mb: 128
 chimebox_modelid: 14             # Quadra 650

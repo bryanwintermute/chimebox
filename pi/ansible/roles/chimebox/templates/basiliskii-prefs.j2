@@ -40,14 +40,18 @@ noclipconversion false
 # (sleep -> wake on input -> redraw). Default OFF for chimebox; the
 # Pi has plenty of headroom and we'd rather have smooth interaction.
 idlewait false
-# init_grab: if true, BasiliskII captures the host pointer inside its
-# window and uses relative-motion deltas. If false, it uses absolute
-# coordinates from X. On modern X with a high-DPI mouse, absolute mode
-# can produce 'cursor all over the place' behavior because of how
-# coordinate scaling and SDL2 motion events interact. Grab mode is the
-# canonical emulator setup and also a feature for kiosk use: the
-# cursor cannot leave the Mac screen.
-init_grab true
+# init_grab: when true, BasiliskII captures the host pointer inside its
+# window and uses relative-motion deltas. When false, it uses absolute
+# coordinates from X.
+#
+#   true  -- best for physical mouse / kiosk use; cursor cannot leave
+#            the Mac screen. Required for the pillarbox display profile
+#            (otherwise pillar-area motion outside the B2 window
+#            doesn't update the Mac cursor).
+#   false -- required for PiKVM/VNC (which send absolute HID coords).
+#            Display profile must be matched (X canvas size == B2
+#            window size) to avoid offset.
+init_grab {{ 'true' if chimebox_init_grab else 'false' }}
 swap_opt_cmd false
 keyboardtype 5
 mousewheelmode 1
