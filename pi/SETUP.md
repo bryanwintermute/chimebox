@@ -55,6 +55,18 @@ Or download from <https://www.raspberrypi.com/software/>.
    note at the top of this file for why we prefer it over Bookworm.)
 5. Click **Choose Storage** → select your microSD/NVMe device. **Triple-
    check this is the right device** — Imager will overwrite it.
+   - **macOS quirk**: if the target disk previously held an APFS
+     container (e.g., you used it as a Mac scratch volume), Imager
+     will silently fail to open it. Nuke any existing APFS container
+     first:
+     ```sh
+     # verify the disk identifier first!
+     diskutil list
+     # then wipe partition table:
+     diskutil eraseDisk free EMPTY /dev/diskN
+     ```
+     Then re-launch Imager. (See `~/myconfigs/copilot/lessons/pi-imager-apfs-on-macos.md`
+     for the long version.)
 6. Click **Next** → **Edit Settings** when prompted.
 
 In the **General** tab:
