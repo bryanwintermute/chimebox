@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+# Argon One V3 fan curve configuration.
+# Format: lines of <temperature_celsius>=<fan_speed_percent>, sorted ascending.
+# The daemon reads this on every poll, so changes take effect on the next
+# poll (~5s) without restarting the service.
+{% for entry in chimebox_argon_fan_curve | sort(attribute='temp') %}
+{{ entry.temp }}={{ entry.speed }}
+{% endfor %}

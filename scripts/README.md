@@ -22,6 +22,7 @@ chmod +x config.sh
 | `snapshot-now.sh` | Trigger a manual snapshot of `System.dsk` | Before risky changes; ad hoc |
 | `kid-reset.sh` | Restore `System.dsk` from a chosen snapshot | When something goes wrong on the Pi side |
 | `service-mode.sh` | Stop the kiosk for maintenance, give you a shell, restart on exit | Whenever you need to poke at the Pi while it's running |
+| `mouse-mode.sh` | Toggle BasiliskII between relative-mouse (kiosk default) and absolute mode (PiKVM/VNC/tablet) | When switching between physical and remote input setups |
 
 All four scripts:
 

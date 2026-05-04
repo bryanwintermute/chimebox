@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Argon One V3 fan + power-button daemon.
+# Installed by the chimebox 'argon-one-v3' Ansible role.
+
+[Unit]
+Description=Argon One V3 Fan and Power Button Service
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+RemainAfterExit=true
+ExecStart=/usr/bin/python3 {{ chimebox_argon_install_dir }}/argononed.py SERVICE
+
+[Install]
+WantedBy=multi-user.target

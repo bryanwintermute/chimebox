@@ -131,6 +131,47 @@ Specifically deferred docs from the foundation chunk:
 
 Bigger-than-v1 items that need design.
 
+- [ ] **Hide the Linux boot, show a Happy-Mac splash instead**.
+      Today the user sees the Pi rainbow splash, then scrolling
+      systemd boot output, then the X session starts. Goal: from
+      power-on to BasiliskII, never expose Linux. Mechanism:
+        - `cmdline.txt` flags: `quiet splash logo.nologo console=tty3
+          vt.global_cursor_default=0 plymouth.ignore-serial-consoles`
+        - Custom plymouth theme rendering a fullscreen image (e.g.
+          the classic "Welcome to Macintosh" / Happy Mac)
+        - Disable the Pi's rainbow splash via `disable_splash=1` in
+          `/boot/firmware/config.txt`
+        - Probably a new Ansible role `boot-splash` with a default
+          theme but designed to be replaceable by users who want
+          different aesthetics.
+      Plays well with the existing `hdmi-firmware-pin` work in v1
+      polish; both touch `/boot/firmware/config.txt`.
+
+- [ ] **Boot-time selector for which environment to launch**. A
+      small selector shown briefly before the kiosk locks in,
+      letting the user pick: Mac OS 7.5.5, Mac OS 8.1, Mac OS 9
+      (SheepShaver), NeXTSTEP (Previous), Apple II (MAME), etc.
+      Driven by a `chimebox_profiles` list in group_vars; each
+      profile names an emulator role + ROM + disk set. UI options:
+      curses TUI on tty1, or SDL-rendered menu before BasiliskII.
+      Prerequisite: Ansible roles for multi-emulator support
+      (`chimebox` role would split into `chimebox-runtime` +
+      one emulator role per supported emulator).
+
+- [ ] **PiKVM mouse compatibility (or document its absence)**.
+      PiKVM emulates a USB HID device and sends absolute pointer
+      coordinates. BasiliskII with `init_grab=true` (relative-mouse
+      capture mode, which we set for kiosk-quality interaction)
+      interprets those absolute values as relative deltas, producing
+      backwards/upside-down/weird cursor behavior. Options:
+        - Document the limitation: use SSH for chimebox admin, not
+          PiKVM. (Most likely outcome.)
+        - Toggle B2 between absolute and relative modes via a
+          script ("chimebox-pikvm-mode on/off").
+        - Detect PiKVM by USB VID/PID at start.sh time and pick
+          the right `init_grab` value.
+      Worth a lesson file once we confirm the diagnosis.
+
 - [ ] **At Ease overlay** as opt-in role. Apple's actual kid-shell
       from this era. Fully period-correct alternative to "raw
       Finder". Toggle via `chimebox_use_at_ease: true` in

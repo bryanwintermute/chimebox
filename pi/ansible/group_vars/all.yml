@@ -93,6 +93,12 @@ chimebox_snapshot_keep_weekly: 4
 chimebox_snapshot_hour: 3        # 03:00 local time
 chimebox_snapshot_minute: 17     # offset from the hour to avoid the rush
 
+# Argon One V3 case (optional)
+# Set to true if the Pi is housed in an Argon One V3 case. Installs the
+# I2C fan/power-button daemon. Default false because most users won't
+# have this case. See roles/argon-one-v3/README.md.
+chimebox_argon_one_v3: false
+
 # Lockdown toggles (most users want all of these on)
 chimebox_disable_screen_blanking: true
 chimebox_hide_host_cursor: true

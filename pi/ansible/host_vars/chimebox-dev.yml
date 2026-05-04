@@ -1,0 +1,6 @@
+---
+# host_vars/chimebox-dev.yml -- overrides for the development Pi.
+# This file is committed; values are not secrets, just per-host config.
+
+# Pi 5 is housed in an Argon One V3 case; install the fan daemon.
+chimebox_argon_one_v3: true

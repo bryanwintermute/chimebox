@@ -1,0 +1,35 @@
+---
+# roles/argon-one-v3/defaults/main.yml
+
+# Default fan curve. Override in group_vars/all.yml or host_vars to taste.
+# List of {temp: <celsius>, speed: <percent 0-100>} pairs, sorted by temp.
+chimebox_argon_fan_curve:
+  - {temp: 55, speed: 10}
+  - {temp: 60, speed: 25}
+  - {temp: 65, speed: 55}
+  - {temp: 70, speed: 100}
+
+# Argon's CDN base URL. Override if you want to vendor the files
+# elsewhere (e.g., your own mirror).
+chimebox_argon_download_base: "https://download.argon40.com/scripts"
+
+# Where the daemon files live on the Pi. Matches upstream conventions
+# so any unsupported tooling that expects /etc/argon/ keeps working.
+chimebox_argon_install_dir: /etc/argon
+
+# Files we fetch from upstream. Each entry is {dest, url, sha256}. The
+# sha256 is what we expect; if it changes, the get_url module will fail
+# and we know upstream changed and we should re-pin.
+chimebox_argon_files:
+  - dest: argononed.py
+    url: argononed.py
+    sha256: fe0df8e7613e7958537176c18e87bbc8d0277b2a182686e8feb3082c438437e2
+  - dest: argonsysinfo.py
+    url: argonsysinfo.py
+    sha256: 0e5a1f70d11267f09c20b8fde1bb5dc44c3e49f1f912a4b2df238ba080723e4c
+  - dest: argonregister.py
+    url: argonregister.py
+    sha256: 0aceb338a1e567a91c2de4317ac3c57f674e245f4120525a4195fcda0167c04b
+  - dest: argonpowerbutton.py
+    url: argonpowerbutton-libgpiod.py
+    sha256: 14d44370b59e6b46d601a0fb455b07da36b1af1c84b2089427b7c83ba6c0ddc9

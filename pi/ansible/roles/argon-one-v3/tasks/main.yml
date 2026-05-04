@@ -1,0 +1,66 @@
+---
+# roles/argon-one-v3/tasks/main.yml
+
+- name: Install Argon daemon dependencies (apt)
+  ansible.builtin.apt:
+    name:
+      - python3-libgpiod
+      - python3-smbus
+      - i2c-tools
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure I2C is enabled
+  ansible.builtin.command: raspi-config nonint do_i2c 0
+  register: i2c_enable
+  changed_when: false
+  failed_when:
+    - i2c_enable.rc != 0
+    - "'not found' not in (i2c_enable.stderr | default(''))"
+
+- name: Create Argon install directory
+  ansible.builtin.file:
+    path: "{{ chimebox_argon_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Fetch Argon Python sources (pinned by sha256)
+  ansible.builtin.get_url:
+    url: "{{ chimebox_argon_download_base }}/{{ item.url }}"
+    dest: "{{ chimebox_argon_install_dir }}/{{ item.dest }}"
+    checksum: "sha256:{{ item.sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+    force: false  # idempotent; don't re-download if already correct
+  loop: "{{ chimebox_argon_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Install argononed systemd unit
+  ansible.builtin.template:
+    src: argononed.service.j2
+    dest: /lib/systemd/system/argononed.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd and restart argononed
+
+- name: Install fan curve config
+  ansible.builtin.template:
+    src: argononed.conf.j2
+    dest: /etc/argononed.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart argononed
+
+- name: Enable and start argononed
+  ansible.builtin.systemd:
+    name: argononed.service
+    enabled: true
+    state: started
+    daemon_reload: true
