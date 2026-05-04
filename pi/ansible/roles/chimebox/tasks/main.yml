@@ -15,6 +15,16 @@
     - "{{ chimebox_home }}/.config"
     - "{{ chimebox_home }}/.config/BasiliskII"
 
+- name: Check whether the library disk has been pushed
+  ansible.builtin.stat:
+    path: "{{ chimebox_runtime_dir }}/{{ chimebox_library_disk_filename }}"
+  register: chimebox_library_disk_stat
+  changed_when: false
+
+- name: Set library disk presence fact
+  ansible.builtin.set_fact:
+    chimebox_library_disk_present: "{{ chimebox_library_disk_stat.stat.exists }}"
+
 - name: Install BasiliskII prefs
   ansible.builtin.template:
     src: basiliskii-prefs.j2

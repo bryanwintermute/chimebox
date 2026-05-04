@@ -13,6 +13,12 @@
 
 rom {{ chimebox_runtime_dir }}/{{ chimebox_rom_filename }}
 disk {{ chimebox_runtime_dir }}/{{ chimebox_system_disk_filename }}
+{# Library disk is optional. The role checks for its presence and sets
+   chimebox_library_disk_present accordingly; this stanza is only emitted
+   if InfiniteHD.dsk has been pushed to the runtime dir. #}
+{% if chimebox_library_disk_present | default(false) %}
+disk {{ chimebox_runtime_dir }}/{{ chimebox_library_disk_filename }}
+{% endif %}
 screen win/{{ chimebox_screen_width }}/{{ chimebox_screen_height }}
 ramsize {{ chimebox_ram_mb * 1024 * 1024 }}
 modelid {{ chimebox_modelid }}

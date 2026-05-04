@@ -93,6 +93,19 @@ chimebox_ssh_interactive "
     if [[ -f '${CHIMEBOX_RUNTIME_DIR}/InfiniteHD.dsk' ]]; then
         sudo chmod 0440 '${CHIMEBOX_RUNTIME_DIR}/InfiniteHD.dsk'
     fi
+
+    # If we just pushed an InfiniteHD.dsk and the BasiliskII prefs file
+    # doesn't already mount it, add a 'disk' line. Idempotent.
+    PREFS=/home/${CHIMEBOX_USER}/.config/BasiliskII/prefs
+    LIB_PATH='${CHIMEBOX_RUNTIME_DIR}/InfiniteHD.dsk'
+    if [[ -f \"\$LIB_PATH\" ]] && [[ -f \"\$PREFS\" ]]; then
+        if ! sudo grep -qF \"disk \$LIB_PATH\" \"\$PREFS\"; then
+            # Insert library-disk line right after the existing system-disk line.
+            sudo sed -i \"/^disk ${CHIMEBOX_RUNTIME_DIR//\\//\\\\/}\\/System.dsk/a disk \$LIB_PATH\" \"\$PREFS\"
+            echo 'Added InfiniteHD to BasiliskII prefs.'
+        fi
+    fi
+
     echo 'Installed:'
     sudo ls -lh '${CHIMEBOX_RUNTIME_DIR}'
 "
