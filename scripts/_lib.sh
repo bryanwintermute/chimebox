@@ -50,7 +50,13 @@ chimebox_ssh_interactive() {
 
 # Verify connectivity. Call early in any script.
 chimebox_check_reachable() {
-    if ! chimebox_ssh -o BatchMode=yes 'true' 2>/dev/null; then
+    # Run via ssh directly so connect-timeout flags go to ssh, not the
+    # remote command. Don't use BatchMode=yes -- it disables agent
+    # forwarding, which would make an SSH-agent-managed key (e.g.
+    # 1Password) appear unavailable even when it actually works for
+    # subsequent calls.
+    if ! ssh "${CHIMEBOX_SSH_OPTS[@]}" -o ConnectTimeout=5 \
+            "${CHIMEBOX_ADMIN_USER}@${CHIMEBOX_SSH_HOST}" 'true' 2>/dev/null; then
         fail "Cannot reach ${CHIMEBOX_ADMIN_USER}@${CHIMEBOX_SSH_HOST}.
   Check that the Pi is up and your SSH key is authorized.
   Try: ssh ${CHIMEBOX_ADMIN_USER}@${CHIMEBOX_SSH_HOST}"
