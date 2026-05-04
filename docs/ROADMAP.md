@@ -28,14 +28,19 @@ Things that should land before any actual handoff to a young user.
 
 ### Audio
 
-- [ ] **Validate audio output**. Prefs has `nosound false`; never
-      tested. Pi 5 + Trixie defaults to PipeWire; Mac OS 8.1 startup
-      chime should be audible.
+- [x] **Validate audio output**. ✅ Confirmed working when a USB
+      speaker is plugged in at boot time. (User's earlier "no sound"
+      observation was a hot-plug issue, not a config problem.)
 - [ ] **HDMI vs. analog routing**. If audio doesn't work out of the
       box, configure ALSA / PipeWire defaults to route to HDMI
       (assuming the monitor has speakers) or to a USB DAC.
 - [ ] **Default volume level**. Boot chime at 100% can be loud. Set a
       sane default (50–70%) via Ansible.
+- [ ] **Hot-plug audio devices**. Today, BasiliskII picks the
+      default audio sink at start. Plugging a USB speaker after the
+      kiosk has launched does nothing. Decide whether to handle this
+      (PipeWire migration on hot-plug) or document the constraint
+      ("plug audio in before powering on").
 
 ### Shutdown / power
 
