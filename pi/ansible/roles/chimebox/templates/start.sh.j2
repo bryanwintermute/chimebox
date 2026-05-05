@@ -104,6 +104,12 @@ export SDL_VIDEO_CENTERED=1
 # row we exit so xinit can fall back to the autologin -> getty path
 # (which at least leaves the operator a tty to debug from).
 #
+# Bedtime sentinel: when /run/chimebox-bedtime exists, we idle without
+# running BasiliskII. scripts/bedtime.sh arms this so the kid's
+# in-emulator Shut Down click during the warning period doesn't get
+# papered over by the supervisor respawning. wake-up.sh / phase 3 of
+# bedtime.sh remove the sentinel.
+#
 # The exit-code is intentionally NOT used to discriminate "deliberate
 # Mac shutdown" from "BasiliskII fatal error" -- BasiliskII calls
 # exit(0) from many fatal paths too. The rollback-on-shutdown
@@ -120,11 +126,21 @@ CRASH_THRESHOLD_SEC=5
 MAX_BACKOFF_SEC=60
 MAX_FAST_FAILS=10
 RESET_RUNTIME_SEC=30
+SENTINEL_FILE=/run/chimebox-bedtime
 
 backoff=1
 fast_fails=0
 
 while :; do
+    if [ -f "${SENTINEL_FILE}" ]; then
+        echo "chimebox: bedtime sentinel present; idling without BasiliskII" \
+            >> "${LOG_FILE}"
+        # Sleep long enough that we don't spam the log, short enough that
+        # `wake-up.sh` (which removes the sentinel) feels responsive.
+        sleep 10
+        continue
+    fi
+
     started=$(date +%s)
     BasiliskII >> "${LOG_FILE}" 2>&1
     rc=$?
