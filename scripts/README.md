@@ -23,8 +23,10 @@ chmod +x config.sh
 | `kid-reset.sh` | Restore `System.dsk` from a chosen snapshot | When something goes wrong on the Pi side |
 | `service-mode.sh` | Stop the kiosk for maintenance, give you a shell, restart on exit | Whenever you need to poke at the Pi while it's running |
 | `mouse-mode.sh` | Toggle BasiliskII between relative-mouse (kiosk default) and absolute mode (PiKVM/VNC/tablet) | When switching between physical and remote input setups |
+| `bedtime.sh` | Politely ask the Mac to shut down (`SIGTERM` triggers the Mac OS shutdown dialog), wait N minutes, then stop the kiosk | End of day |
+| `wake-up.sh` | Restart the kiosk after `bedtime.sh` (inverse: starts getty, autologin chain takes over) | Start of day |
 
-All four scripts:
+All scripts:
 
 - Read shared config from `config.sh` (or `config.example.sh` defaults).
 - Connect to the Pi as the admin user (`bryan` by default).
@@ -47,6 +49,14 @@ All four scripts:
 # You want to apt-update or fix something on the Pi:
 ./service-mode.sh          # opens a shell on the Pi with the kiosk paused
                            # exit the shell -> kiosk resumes
+
+# End of day, with a 5-minute wrap-up warning:
+./bedtime.sh               # default 5-minute SIGTERM warning, then stops kiosk
+./bedtime.sh 10            # 10-minute warning instead
+./bedtime.sh 0             # immediate (still graceful via Mac OS dialog)
+
+# Start of day:
+./wake-up.sh
 ```
 
 ## Why scripts AND Ansible?
