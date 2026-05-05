@@ -99,6 +99,30 @@ chimebox_snapshot_keep_weekly: 4
 chimebox_snapshot_hour: 3        # 03:00 local time
 chimebox_snapshot_minute: 17     # offset from the hour to avoid the rush
 
+# Shutdown semantics: what start.sh does when BasiliskII exits
+# (Mac OS 8.1's Special > Shut Down inside the guest).
+#
+#   "restart" -- just restart BasiliskII in place, with X kept up so
+#                the visual transition is a brief black screen rather
+#                than a full X teardown / login flicker. This is the
+#                only supported value in v1.
+#
+# Future v2 values (planned):
+#   "restart-with-rollback" -- on Mac shutdown, restore System.dsk
+#                from a factory.dsk baseline (NOT the cron 'latest'
+#                snapshot, which can capture in-flight state) before
+#                restart. Becomes a "panic button" for the kid.
+#                Requires (a) a robust shutdown discriminator (BasiliskII
+#                exits 0 on fatal errors too, so rc alone isn't safe)
+#                and (b) a separate factory snapshot type taken at
+#                push-disks time. See roles/chimebox/README for the
+#                full design notes.
+#   "poweroff" -- Mac shutdown -> Pi systemctl poweroff. Needs
+#                sudoers entry for chimebox user.
+#   "reboot"   -- Mac shutdown -> Pi reboot (cycles back through
+#                Plymouth splash). Needs sudoers entry too.
+chimebox_shutdown_action: restart
+
 # Argon One V3 case (optional)
 # Set to true if the Pi is housed in an Argon One V3 case. Installs the
 # I2C fan/power-button daemon. Default false because most users won't

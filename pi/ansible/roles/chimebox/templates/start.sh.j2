@@ -93,5 +93,69 @@ export SDL_VIDEO_X11_XINPUT2=1
 export SDL_VIDEO_CENTERED=1
 {% endif %}
 
-# Run BasiliskII; all config is in ~/.config/BasiliskII/prefs.
-exec BasiliskII >> "${LOG_FILE}" 2>&1
+# Run BasiliskII in a supervised loop. X stays up across Mac OS 8.1
+# 'Special > Shut Down' (which causes BasiliskII to exit cleanly), so
+# the user sees a brief black screen and then BasiliskII reboots in
+# place -- no X teardown, no autologin / startx flicker.
+#
+# Crash-loop protection: if BasiliskII exits in less than
+# CRASH_THRESHOLD_SEC, we treat it as a failure and back off
+# exponentially up to a cap. After MAX_FAST_FAILS short runs in a
+# row we exit so xinit can fall back to the autologin -> getty path
+# (which at least leaves the operator a tty to debug from).
+#
+# The exit-code is intentionally NOT used to discriminate "deliberate
+# Mac shutdown" from "BasiliskII fatal error" -- BasiliskII calls
+# exit(0) from many fatal paths too. The rollback-on-shutdown
+# behavior (chimebox_shutdown_action: restart-with-rollback) is
+# planned for v2 once we have (a) a factory.dsk baseline and (b) a
+# discriminator we trust.
+#
+# Per chimebox_shutdown_action ({{ chimebox_shutdown_action | default('restart') }}):
+#   restart -- v1 default; smooth in-place restart loop (this script).
+{# Future v2 will branch on chimebox_shutdown_action; for now only
+   'restart' is implemented and any other value falls through to it. #}
+
+CRASH_THRESHOLD_SEC=5
+MAX_BACKOFF_SEC=60
+MAX_FAST_FAILS=10
+RESET_RUNTIME_SEC=30
+
+backoff=1
+fast_fails=0
+
+while :; do
+    started=$(date +%s)
+    BasiliskII >> "${LOG_FILE}" 2>&1
+    rc=$?
+    runtime=$(( $(date +%s) - started ))
+
+    echo "chimebox: BasiliskII exited rc=${rc} after ${runtime}s" \
+        >> "${LOG_FILE}"
+
+    if [ "${runtime}" -lt "${CRASH_THRESHOLD_SEC}" ]; then
+        fast_fails=$((fast_fails + 1))
+        if [ "${fast_fails}" -ge "${MAX_FAST_FAILS}" ]; then
+            echo "chimebox: ${fast_fails} fast failures in a row;" \
+                 "giving up so getty can take over" >> "${LOG_FILE}"
+            exit 1
+        fi
+        echo "chimebox: short run; backing off ${backoff}s" \
+            >> "${LOG_FILE}"
+        sleep "${backoff}"
+        backoff=$(( backoff * 2 ))
+        if [ "${backoff}" -gt "${MAX_BACKOFF_SEC}" ]; then
+            backoff="${MAX_BACKOFF_SEC}"
+        fi
+    else
+        # Long enough that we treat this as a real session
+        # (boot + use + Mac OS shutdown). Reset the backoff state.
+        if [ "${runtime}" -ge "${RESET_RUNTIME_SEC}" ]; then
+            fast_fails=0
+            backoff=1
+        fi
+        # Brief pause so the user sees that "shutdown happened" --
+        # screen stays black for a moment before the Mac comes back.
+        sleep 1
+    fi
+done
