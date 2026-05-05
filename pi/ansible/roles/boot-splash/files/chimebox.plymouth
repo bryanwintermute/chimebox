@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=chimebox
+Description=Minimal centered-image splash for the chimebox kiosk.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/chimebox
+ScriptFile=/usr/share/plymouth/themes/chimebox/chimebox.script

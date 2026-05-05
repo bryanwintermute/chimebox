@@ -1,0 +1,180 @@
+---
+# roles/boot-splash/tasks/main.yml
+#
+# Replace the visible Linux boot (rainbow splash + scrolling kernel
+# text + login prompt flicker) with a single calm Plymouth splash.
+# After provisioning, the next boot will go:
+#
+#   Pi firmware (silent, no rainbow)
+#     -> Plymouth splash (centered image on solid gray)
+#     -> brief tty1 login (suppressed motd / issue)
+#     -> X server takeover -> BasiliskII boot screen
+#
+# All cmdline.txt and config.txt edits are idempotent: re-running
+# the role with the same vars is a no-op.
+#
+# This role is opted in via `chimebox_boot_splash_enabled` in
+# playbook.yml's role-list `when:` (matches argon-one-v3 pattern).
+
+- name: Install Plymouth and themes
+  ansible.builtin.apt:
+    name:
+      - plymouth
+      - plymouth-themes
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create chimebox Plymouth theme directory
+  ansible.builtin.file:
+    path: "/usr/share/plymouth/themes/{{ chimebox_boot_splash_theme }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Plymouth theme descriptor
+  ansible.builtin.copy:
+    src: chimebox.plymouth
+    dest: "/usr/share/plymouth/themes/{{ chimebox_boot_splash_theme }}/{{ chimebox_boot_splash_theme }}.plymouth"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: rebuild initramfs
+
+- name: Install Plymouth theme script
+  ansible.builtin.copy:
+    src: chimebox.script
+    dest: "/usr/share/plymouth/themes/{{ chimebox_boot_splash_theme }}/{{ chimebox_boot_splash_theme }}.script"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: rebuild initramfs
+
+- name: Install splash image
+  ansible.builtin.copy:
+    src: "{{ chimebox_boot_splash_image }}"
+    dest: "/usr/share/plymouth/themes/{{ chimebox_boot_splash_theme }}/splash.png"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: rebuild initramfs
+
+- name: Get current default Plymouth theme
+  ansible.builtin.command: plymouth-set-default-theme
+  register: chimebox_boot_splash_current_theme
+  changed_when: false
+
+- name: Set chimebox as default Plymouth theme
+  ansible.builtin.command: "plymouth-set-default-theme {{ chimebox_boot_splash_theme }}"
+  when: chimebox_boot_splash_current_theme.stdout | trim != chimebox_boot_splash_theme
+  notify: rebuild initramfs
+
+# --- /boot/firmware/cmdline.txt: quiet kernel boot ----------------------
+# Ansible's `backup: true` puts ':' in the timestamp suffix, and the
+# /boot/firmware partition is FAT32, which rejects ':' in filenames.
+# Instead we make our own first-run-only canonical backup, then do the
+# in-place edits without `backup: true`.
+
+- name: Back up /boot/firmware/cmdline.txt (first run only)
+  ansible.builtin.copy:
+    src: /boot/firmware/cmdline.txt
+    dest: /boot/firmware/cmdline.txt.chimebox-bak
+    remote_src: true
+    force: false
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Move kernel console off tty1 (so getty's first paint doesn't flash)
+  ansible.builtin.replace:
+    path: /boot/firmware/cmdline.txt
+    regexp: '\bconsole=tty1\b'
+    replace: 'console=tty3'
+  when: chimebox_boot_splash_move_console_off_tty1 | bool
+
+- name: "Append Plymouth-friendly cmdline args (idempotent: only if 'quiet' missing)"
+  ansible.builtin.replace:
+    path: /boot/firmware/cmdline.txt
+    # Negative-lookahead: only match a line that does NOT already
+    # contain `quiet`. Once added, re-runs are no-ops.
+    regexp: '^(?!.*\bquiet\b)(.*)$'
+    replace: '\1 {{ chimebox_boot_splash_cmdline_args | join(" ") }}'
+
+- name: Verify cmdline.txt is still a single line
+  ansible.builtin.command: wc -l /boot/firmware/cmdline.txt
+  register: chimebox_boot_splash_cmdline_lines
+  changed_when: false
+  failed_when: chimebox_boot_splash_cmdline_lines.stdout.split()[0] | int > 1
+
+# --- /boot/firmware/config.txt: disable Pi firmware rainbow splash ------
+
+- name: Back up /boot/firmware/config.txt (first run only)
+  ansible.builtin.copy:
+    src: /boot/firmware/config.txt
+    dest: /boot/firmware/config.txt.chimebox-bak
+    remote_src: true
+    force: false
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Disable Pi firmware rainbow splash
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    line: "disable_splash=1"
+    regexp: '^#?\s*disable_splash\s*='
+    state: present
+  when: chimebox_boot_splash_disable_rainbow | bool
+
+# --- Suppress getty / login banner noise --------------------------------
+# Even with a quiet kernel and Plymouth, the brief window between
+# plymouth-quit and X starting can leak getty's "<host> login: <user>"
+# and lastlog/motd output onto the screen. We empty issue and motd,
+# and demote the update-motd scripts so PAM/login has nothing to print.
+
+- name: Blank /etc/issue (no pre-login banner)
+  ansible.builtin.copy:
+    dest: /etc/issue
+    content: ""
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: Blank /etc/issue.net (no remote login banner)
+  ansible.builtin.copy:
+    dest: /etc/issue.net
+    content: ""
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: Blank /etc/motd (no post-login banner)
+  ansible.builtin.copy:
+    dest: /etc/motd
+    content: ""
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: Find dynamic motd scripts
+  ansible.builtin.find:
+    paths: /etc/update-motd.d
+    file_type: file
+  register: chimebox_boot_splash_motd_scripts
+
+- name: Disable dynamic motd scripts (chmod 0644 -- still readable, not executable)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "0644"
+  loop: "{{ chimebox_boot_splash_motd_scripts.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# --- Hand off to handlers (initramfs rebuild) ---------------------------
+
+- name: Flush handlers (rebuild initramfs now if anything changed)
+  ansible.builtin.meta: flush_handlers

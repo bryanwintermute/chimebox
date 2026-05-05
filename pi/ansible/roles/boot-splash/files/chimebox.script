@@ -1,0 +1,30 @@
+// chimebox Plymouth script.
+//
+// Renders splash.png centered on a solid light-gray background and
+// then ignores Plymouth's progress / message / status callbacks so
+// boot text never appears on screen, even on errors. The framebuffer
+// is then handed off to X (BasiliskII) by plymouth-quit.
+
+# Light-gray background (classic-Mac-OS gray ~ #cccccc).
+Window.SetBackgroundTopColor(0.80, 0.80, 0.80);
+Window.SetBackgroundBottomColor(0.80, 0.80, 0.80);
+
+splash.image  = Image("splash.png");
+splash.sprite = Sprite();
+splash.sprite.SetImage(splash.image);
+
+# Center on screen.
+splash.x = Window.GetWidth()  / 2 - splash.image.GetWidth()  / 2;
+splash.y = Window.GetHeight() / 2 - splash.image.GetHeight() / 2;
+splash.sprite.SetPosition(splash.x, splash.y, 0);
+
+# Discard everything Plymouth would otherwise paint on top.
+fun noop_refresh()       { return; }
+fun noop_message(text)   { return; }
+fun noop_status(status)  { return; }
+fun noop_progress(d, p)  { return; }
+
+Plymouth.SetRefreshFunction(noop_refresh);
+Plymouth.SetMessageFunction(noop_message);
+Plymouth.SetUpdateStatusFunction(noop_status);
+Plymouth.SetBootProgressFunction(noop_progress);

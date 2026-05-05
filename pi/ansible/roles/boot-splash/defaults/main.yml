@@ -1,0 +1,52 @@
+---
+# roles/boot-splash/defaults/main.yml
+
+# Master switch for the entire role. Defaults on; flip to false in a
+# host_vars file to skip the role on a given host (e.g. for headless
+# debugging where you want to see the boot text).
+chimebox_boot_splash_enabled: true
+
+# Plymouth theme name installed under /usr/share/plymouth/themes/<name>/.
+# Override only if you ship your own theme alongside chimebox's.
+chimebox_boot_splash_theme: chimebox
+
+# Image filename (relative to the role's files/ directory) to use as
+# the splash PNG. The committed default is `splash.png` -- a solid
+# light-gray placeholder, intentionally generic for OSS distribution.
+#
+# To use a custom image (e.g. a Happy Mac for a personal chimebox),
+# drop it at:
+#   pi/ansible/roles/boot-splash/files/local-splash.png
+# and override this var in host_vars:
+#   chimebox_boot_splash_image: local-splash.png
+#
+# Files matching `local-*` in role files/ dirs are gitignored, so the
+# override never leaks into version control.
+chimebox_boot_splash_image: splash.png
+
+# Kernel cmdline arguments added to /boot/firmware/cmdline.txt to make
+# the kernel boot quietly under Plymouth.
+#  - quiet                          suppress most kernel messages
+#  - splash                         tell Plymouth there's a splash to draw
+#  - plymouth.ignore-serial-consoles
+#                                   don't try to draw on serial console
+#  - loglevel=0                     KERN_EMERG only on the framebuffer
+#  - vt.global_cursor_default=0     no blinking cursor on tty
+#  - logo.nologo                    hide the kernel's penguin logo on boot
+chimebox_boot_splash_cmdline_args:
+  - quiet
+  - splash
+  - plymouth.ignore-serial-consoles
+  - loglevel=0
+  - vt.global_cursor_default=0
+  - logo.nologo
+
+# Disable the Pi firmware's rainbow boot splash (the colorful screen
+# that shows for ~1s before the kernel takes over). Setting this to
+# true adds `disable_splash=1` to /boot/firmware/config.txt.
+chimebox_boot_splash_disable_rainbow: true
+
+# Move the kernel console from tty1 (visible during boot) to tty3
+# (off-screen). Without this, even with `quiet`, late-boot kernel
+# messages and getty's first paint flash on screen.
+chimebox_boot_splash_move_console_off_tty1: true

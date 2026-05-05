@@ -53,6 +53,10 @@
       # don't accidentally fire up an X session.
       if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
           if command -v startx >/dev/null 2>&1; then
+              # Clear any login banner / motd output from the framebuffer
+              # so the brief tty1 visible window between plymouth-quit and
+              # X server start is blank, not "chimebox login: chimebox".
+              clear
               exec startx -- -nocursor
           else
               # kiosk-x role hasn't completed yet (e.g. in mid-provisioning).

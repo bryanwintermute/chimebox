@@ -47,6 +47,9 @@
     - role: argon-one-v3
       tags: [argon-one-v3, argon, hardware]
       when: chimebox_argon_one_v3 | bool
+    - role: boot-splash
+      tags: [boot-splash, splash, plymouth]
+      when: chimebox_boot_splash_enabled | default(true) | bool
 
   post_tasks:
     - name: Print next steps

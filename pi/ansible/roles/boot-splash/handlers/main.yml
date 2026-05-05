@@ -1,0 +1,17 @@
+---
+# roles/boot-splash/handlers/main.yml
+
+# Plymouth's theme is loaded from initramfs during early boot, so any
+# change to the theme files (script, .plymouth descriptor, splash
+# image) must trigger an initramfs rebuild. We use update-initramfs
+# directly rather than `plymouth-set-default-theme -R` because the
+# latter also re-sets the default theme, which we manage as a
+# separate explicit step.
+- name: Rebuild initramfs to embed updated Plymouth theme
+  ansible.builtin.command: update-initramfs -u
+  listen: rebuild initramfs
+
+# Note: changes to /boot/firmware/cmdline.txt and config.txt only
+# take effect on the next reboot. There's no daemon to reload. We do
+# *not* trigger a reboot from Ansible -- chimebox provisioning is run
+# at quiet times and reboots happen on the operator's schedule.
