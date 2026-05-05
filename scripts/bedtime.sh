@@ -65,7 +65,10 @@ set -uo pipefail
 # Phase 1: arm sentinel, send SIGTERM
 sudo touch /run/chimebox-bedtime
 sudo chmod 644 /run/chimebox-bedtime
-bpid=\$(pgrep -f BasiliskII | head -1 || true)
+# pgrep -x matches the program NAME (comm), not the full command line
+# (-f). Using -f here would match this very script's bash because the
+# string 'BasiliskII' appears in the script body.
+bpid=\$(pgrep -x BasiliskII | head -1 || true)
 if [ -n \"\${bpid}\" ]; then
     sudo kill -TERM \"\${bpid}\"
     echo \"bedtime: SIGTERM sent to BasiliskII pid \${bpid}; sentinel armed.\"
@@ -84,7 +87,8 @@ if [ \"\${WARN_SECONDS}\" -gt 0 ]; then
     last_minute_log=\$(date +%s)
     while [ \"\$(date +%s)\" -lt \"\${end}\" ]; do
         now=\$(date +%s)
-        if pgrep -f BasiliskII >/dev/null; then
+        # pgrep -x (NOT -f) -- see comment above.
+        if pgrep -x BasiliskII >/dev/null; then
             absent_since=0
         else
             [ \"\${absent_since}\" -eq 0 ] && absent_since=\${now}
