@@ -1,0 +1,30 @@
+---
+# roles/recovery-keystroke/defaults/main.yml
+
+# Master switch for the role. Default ON because: the recovery
+# keystroke is inert when nothing's wrong (it just adds a
+# background xbindkeys process). It only fires when an adult
+# deliberately presses the magic combo. Worth the tiny background
+# resource cost for the panic-button capability.
+chimebox_recovery_keystroke_enabled: true
+
+# The keystroke combo that, when pressed inside the kiosk X
+# session, force-resets BasiliskII (and thus the emulated Mac).
+# Default: Ctrl+Alt+Shift+R -- chosen because:
+#   - 4-modifier combo is essentially impossible to hit by
+#     accident, especially with a kid-sized hand
+#   - 'R for Reset' matches Mac's classic "Cmd+Ctrl+Power" reset
+#     convention
+#   - none of the Tier-S kid apps use it
+# Override per-host in host_vars/<hostname>.yml if it conflicts.
+#
+# Format follows xbindkeys: 'Modifier+Modifier+...+Key'.
+chimebox_recovery_keystroke: "Control+Alt+Shift+r"
+
+# Whether to also bind a "secondary" emergency-stop combo that
+# stops the entire kiosk (vs. just resetting the emulator).
+# Equivalent to running scripts/bedtime.sh 0. Default off because
+# adult ops scripts are usually a better path; turn on for setups
+# without convenient SSH access.
+chimebox_recovery_emergency_stop_enabled: false
+chimebox_recovery_emergency_stop_keystroke: "Control+Alt+Shift+q"

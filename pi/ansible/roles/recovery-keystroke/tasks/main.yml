@@ -1,0 +1,57 @@
+---
+# roles/recovery-keystroke/tasks/main.yml
+#
+# Bind a recovery keystroke (default: Ctrl+Alt+Shift+R) inside
+# the kiosk X session. When pressed, xbindkeys invokes
+# chimebox-force-reset which SIGKILLs BasiliskII; the supervisor
+# loop in start.sh respawns the emulator within ~1.5s, so the
+# user sees a brief black screen then a fresh Mac OS boot.
+#
+# This is the manual "panic button" path. Auto-detection of a
+# wedged Mac (high CPU + no input + no screen change for N
+# seconds) is a future enhancement (see
+# detect-wedged-mac todo).
+
+- name: Install xbindkeys
+  ansible.builtin.apt:
+    name:
+      - xbindkeys
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install chimebox-force-reset helper
+  ansible.builtin.copy:
+    src: chimebox-force-reset
+    dest: /usr/local/sbin/chimebox-force-reset
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install chimebox-emergency-stop helper
+  ansible.builtin.template:
+    src: chimebox-emergency-stop.sh.j2
+    dest: /usr/local/sbin/chimebox-emergency-stop
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install sudoers rule for the recovery helpers
+  # Use template+validate so a malformed sudoers line can't lock
+  # the Pi. visudo -cf checks syntax before the file is moved
+  # into place.
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/chimebox-recovery
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"
+
+- name: Install xbindkeysrc for the chimebox user
+  ansible.builtin.template:
+    src: xbindkeysrc.j2
+    dest: "{{ chimebox_home }}/.xbindkeysrc"
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    mode: "0644"

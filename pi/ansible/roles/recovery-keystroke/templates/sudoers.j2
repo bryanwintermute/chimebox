@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+# /etc/sudoers.d/chimebox-recovery
+#
+# Allow the chimebox user to invoke the recovery scripts without
+# a password, so xbindkeys can fire them directly. Tightly
+# scoped: only the two specific helper scripts, only as root,
+# nothing else.
+#
+# Lockdown rationale:
+#   - Each script is owned by root, mode 0750, group root.
+#     Chimebox can read+execute via the explicit sudoers rule
+#     here but cannot modify them.
+#   - The helpers do exactly one thing each (force-reset or
+#     emergency-stop). They don't accept arguments that could
+#     widen the blast radius.
+#   - NOPASSWD is required because xbindkeys runs in the X
+#     session non-interactively; there's no human to type a
+#     password in the moment of panic.
+chimebox  ALL=(root) NOPASSWD: /usr/local/sbin/chimebox-force-reset, /usr/local/sbin/chimebox-emergency-stop

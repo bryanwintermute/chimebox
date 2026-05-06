@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# ~/.xbindkeysrc -- recovery keystrokes for the chimebox kiosk.
+#
+# xbindkeys runs as the chimebox user inside the X session and
+# watches for keyboard events. When the configured combo fires,
+# it invokes the helper script via sudo (allowed by the no-pass
+# sudoers rule installed by this role).
+#
+# The combo is deliberately obscure (4 modifiers) so a kid can't
+# hit it by accident.
+
+# Force-reset: SIGKILLs BasiliskII; supervisor respawns the Mac.
+# Net UX: brief black screen, then Mac OS reboots in place.
+"sudo /usr/local/sbin/chimebox-force-reset"
+    {{ chimebox_recovery_keystroke }}
+
+{% if chimebox_recovery_emergency_stop_enabled | bool %}
+# Emergency stop: arms bedtime sentinel, SIGTERMs BasiliskII,
+# stops getty. Wake with scripts/wake-up.sh.
+"sudo /usr/local/sbin/chimebox-emergency-stop"
+    {{ chimebox_recovery_emergency_stop_keystroke }}
+{% endif %}

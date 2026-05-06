@@ -53,6 +53,9 @@
     - role: outside-world
       tags: [outside-world]
       when: chimebox_outside_world_enabled | default(false) | bool
+    - role: recovery-keystroke
+      tags: [recovery-keystroke, recovery]
+      when: chimebox_recovery_keystroke_enabled | default(true) | bool
 
   post_tasks:
     - name: Print next steps

@@ -1,0 +1,49 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-force-reset
+#
+# Force-reset the emulated Mac by SIGKILLing BasiliskII. The
+# supervisor loop in start.sh catches the exit, sees there's no
+# bedtime sentinel armed, and respawns BasiliskII within ~1.5s.
+# Net user experience: brief black screen, then Mac OS boots
+# back up.
+#
+# Invoked by xbindkeys when the configured keystroke fires
+# (default: Ctrl+Alt+Shift+R). Also runnable manually via SSH or
+# from a future GPIO-button handler.
+#
+# Logs every invocation so adults can audit when the panic button
+# was pressed (useful for debugging "why did the Mac just
+# restart?" later).
+
+set -u
+
+LOG_TAG="chimebox-force-reset"
+log() {
+    logger -t "${LOG_TAG}" -- "$*"
+    echo "${LOG_TAG}: $*" >&2
+}
+
+bpid="$(pgrep -x BasiliskII | head -1 || true)"
+
+if [ -z "${bpid}" ]; then
+    log "no BasiliskII process running; nothing to reset (supervisor will respawn shortly if it's running too)"
+    exit 0
+fi
+
+# Optional: clear the bedtime sentinel in case it was left armed.
+# A force-reset implies the user wants the Mac BACK; if bedtime had
+# armed the sentinel and crashed mid-flow, the supervisor would
+# otherwise idle and never bring BasiliskII back.
+if [ -f /run/chimebox-bedtime ]; then
+    log "bedtime sentinel was armed; clearing it (force-reset implies wake-up)"
+    rm -f /run/chimebox-bedtime
+fi
+
+log "SIGKILL BasiliskII pid=${bpid}; supervisor will respawn"
+kill -9 "${bpid}" || {
+    log "SIGKILL failed (BasiliskII may be defunct or owned by a different user)"
+    exit 1
+}
+
+exit 0

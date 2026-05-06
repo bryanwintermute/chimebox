@@ -1,0 +1,41 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-emergency-stop
+#
+# Stop the entire kiosk -- arms the bedtime sentinel, SIGTERMs
+# BasiliskII for graceful Mac shutdown, then stops getty so X
+# fully tears down. Equivalent to scripts/bedtime.sh 0 from a
+# workstation, but invokable from inside the kiosk via xbindkeys.
+#
+# This is the "I really need it off NOW" key, distinct from the
+# force-reset key. Off by default; enable in host_vars via
+# chimebox_recovery_emergency_stop_enabled.
+
+set -u
+
+LOG_TAG="chimebox-emergency-stop"
+log() {
+    logger -t "${LOG_TAG}" -- "$*"
+    echo "${LOG_TAG}: $*" >&2
+}
+
+log "emergency stop initiated"
+
+# Arm sentinel so the supervisor doesn't respawn during teardown
+touch /run/chimebox-bedtime
+
+bpid="$(pgrep -x BasiliskII | head -1 || true)"
+if [ -n "${bpid}" ]; then
+    # SIGTERM gives Mac OS its shutdown dialog; we don't wait for
+    # the user to confirm because emergency-stop should be fast.
+    # If the Mac dialog appears briefly before the kiosk dies, that's
+    # OK -- it's just visual confirmation that the stop is honest.
+    kill -TERM "${bpid}" 2>/dev/null || true
+fi
+
+# Stop getty so X tears down (matches scripts/bedtime.sh phase 3).
+systemctl stop getty@tty1.service 2>/dev/null || true
+pkill -u {{ chimebox_user }} 2>/dev/null || true
+
+log "kiosk stopped; run wake-up.sh to restart"
+exit 0
