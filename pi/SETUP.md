@@ -9,7 +9,7 @@ You only need to do this once per device.
 ## What you'll end up with
 
 - A Pi 5 running Raspberry Pi OS Trixie Lite (64-bit), no desktop.
-- An admin user (`bryan`) with `sudo` and SSH key authentication.
+- An admin user (e.g. `admin`) with `sudo` and SSH key authentication.
 - The Pi reachable as `chimebox-dev.local` on your LAN.
 - Wi-Fi (or wired Ethernet) configured.
 - No password authentication over SSH.
@@ -72,7 +72,7 @@ Or download from <https://www.raspberrypi.com/software/>.
 In the **General** tab:
 - **Set hostname**: `chimebox-dev`
 - **Set username and password**:
-  - Username: `bryan`
+  - Username: `admin` (or any name you prefer; this guide uses `admin`)
   - Password: any strong password (you'll rarely use it once SSH keys work)
 - **Configure wireless LAN** (skip if using Ethernet):
   - SSID, password, country (e.g., US)
@@ -115,23 +115,24 @@ If that resolves, great. If not, find the IP from your router's DHCP
 lease table (look for hostname `chimebox-dev`), or scan:
 ```sh
 # On Linux / macOS with nmap installed:
-nmap -sn 10.20.0.0/24 | grep -B 2 -i "raspberry"
+nmap -sn 192.168.1.0/24 | grep -B 2 -i "raspberry"
+# (adjust the range to match your home network)
 ```
 
 ## Step 5 — First SSH login
 
 From your workstation:
 ```sh
-ssh bryan@chimebox-dev.local
+ssh admin@chimebox-dev.local
 # or, if mDNS didn't work:
-ssh bryan@<ip-address-from-step-4>
+ssh admin@<ip-address-from-step-4>
 ```
 
 You should land in a prompt without being asked for a password. If you
 *are* asked for a password, your public key didn't make it onto the Pi —
 check the Imager settings or copy your key with `ssh-copy-id`:
 ```sh
-ssh-copy-id bryan@chimebox-dev.local
+ssh-copy-id admin@chimebox-dev.local
 ```
 
 Once in, run:
@@ -151,7 +152,7 @@ In `~/.ssh/config` on your workstation, add:
 ```
 Host chimebox-dev
     HostName chimebox-dev.local
-    User bryan
+    User admin
     ControlMaster auto
     ControlPath ~/.ssh/control/%r@%h:%p
     ControlPersist 8h
@@ -173,7 +174,7 @@ chimebox repo:
 cd pi/ansible
 cp inventory.example.ini inventory.ini
 # Edit inventory.ini to match your Pi's hostname/IP:
-#   chimebox-dev ansible_host=chimebox-dev.local ansible_user=bryan
+#   chimebox-dev ansible_host=chimebox-dev.local ansible_user=admin
 
 ansible-playbook -i inventory.ini playbook.yml
 ```

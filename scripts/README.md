@@ -29,7 +29,7 @@ chmod +x config.sh
 All scripts:
 
 - Read shared config from `config.sh` (or `config.example.sh` defaults).
-- Connect to the Pi as the admin user (`bryan` by default).
+- Connect to the Pi as the admin user (`admin` by default).
 - Use `sudo` on the Pi for privileged operations -- you'll be prompted
   for the admin user's sudo password.
 - Fail loudly with helpful messages if something is off.

@@ -10,7 +10,7 @@ CHIMEBOX_SSH_HOST="chimebox-dev.local"
 
 # Admin user on the Pi (created by Pi Imager during first-boot setup).
 # Has sudo and SSH access. NOT the kiosk user.
-CHIMEBOX_ADMIN_USER="bryan"
+CHIMEBOX_ADMIN_USER="admin"
 
 # Kiosk user on the Pi (created by the Ansible kiosk-user role).
 # Runs the X session and emulator. No SSH access, no sudo.

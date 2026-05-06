@@ -1,7 +1,7 @@
 # role: kiosk-user
 
 Creates the unprivileged `chimebox` user that runs the X session and the
-emulator. Separation from the admin user (`bryan`) keeps the kiosk
+emulator. Separation from the admin user (e.g. `admin`) keeps the kiosk
 session sandboxed:
 
 - No sudo
