@@ -50,6 +50,9 @@
     - role: boot-splash
       tags: [boot-splash, splash, plymouth]
       when: chimebox_boot_splash_enabled | default(true) | bool
+    - role: outside-world
+      tags: [outside-world]
+      when: chimebox_outside_world_enabled | default(false) | bool
 
   post_tasks:
     - name: Print next steps

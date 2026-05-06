@@ -1,0 +1,28 @@
+[Unit]
+Description=chimebox USB mount for /dev/%i
+# BindsTo + After ensures: when the kernel block device disappears
+# (USB unplug), systemd stops this unit, which fires ExecStop and
+# unmounts/cleans up. Without BindsTo, a yanked stick leaves a
+# stale mountpoint until reboot.
+BindsTo=dev-%i.device
+After=dev-%i.device
+
+[Service]
+# Type=oneshot + RemainAfterExit=yes is REQUIRED for the BindsTo
+# lifecycle to work: the mount command exits immediately, but
+# systemd treats the service as "active" until the device goes
+# away, at which point it runs ExecStop.
+Type=oneshot
+RemainAfterExit=yes
+
+# Helper script does all the actual work: probe filesystem, sanitize
+# label, build mount path, mount with the right options, log clearly.
+# Keeping logic in a real script (vs inline /bin/sh -c) makes it
+# testable, auditable, and avoids systemd-quoting gymnastics.
+ExecStart=/usr/local/sbin/chimebox-usb-helper mount %i
+ExecStop=/usr/local/sbin/chimebox-usb-helper unmount %i
+
+# Ten seconds is plenty for a healthy USB device. If umount is still
+# stuck after that, the helper has already escalated to lazy unmount
+# and we'd rather move on than hang forever.
+TimeoutStopSec=10

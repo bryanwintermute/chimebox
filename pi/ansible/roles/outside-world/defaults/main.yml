@@ -1,0 +1,33 @@
+---
+# roles/outside-world/defaults/main.yml
+
+# Master switch. Off by default so the role is inert unless a host
+# opts in via group_vars/all.yml or host_vars/<host>.yml.
+chimebox_outside_world_enabled: true
+
+# Path on the Pi that BasiliskII's extfs maps to a folder on the
+# Mac OS desktop (named after the directory's basename).
+chimebox_outside_world_dir: /home/{{ chimebox_user }}/outside-world
+
+# When true, USB sticks are mounted read-only. Default false because
+# the primary use cases (camera SD -> MacPaint, Mac drawing -> fridge
+# frame) need write access. Read-only is the safe-paranoid mode for
+# very-young-kid setups -- protects against corruption-on-yank but
+# breaks the "save back to USB" workflow.
+chimebox_outside_world_readonly: false
+
+# Filesystems we'll auto-mount. Anything else is logged and ignored.
+# Keep this conservative: removable media is an attack surface, and
+# weird filesystems (HFS+, APFS, ext4, ZFS, ...) on a USB stick
+# headed for a kid's emulator is almost certainly a mistake.
+chimebox_outside_world_allowed_fstypes:
+  - vfat
+  - exfat
+  - ntfs
+  - ntfs3
+
+# Sub-directory naming under outside-world/. The volume label (if
+# any) is sanitized; the partition's UUID's first 8 chars is appended
+# for uniqueness so two unlabeled sticks don't collide.
+# Final form: USB-<safe-label>-<uuid8> or USB-<uuid8> if no label.
+chimebox_outside_world_mount_prefix: "USB-"

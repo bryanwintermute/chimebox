@@ -1,0 +1,67 @@
+---
+# roles/outside-world/tasks/main.yml
+#
+# "Outside World" feature: a host directory appears as a folder on
+# the Mac OS desktop (via BasiliskII's extfs). USB sticks plugged
+# into the Pi auto-mount as sub-folders inside it, so the kid sees
+# new content arrive on the Mac without any keyboard/manual step.
+#
+# All of this is opt-in via chimebox_outside_world_enabled. The
+# extfs prefs change is owned by the chimebox role's prefs template
+# (this role just sets the directory up); see roles/chimebox/
+# templates/basiliskii-prefs.j2.
+
+- name: Install USB-mount filesystem-helper packages
+  ansible.builtin.apt:
+    name:
+      # NTFS is widely used on USB sticks formatted by Windows. The
+      # kernel ntfs3 driver in Bookworm handles read but ntfs-3g is
+      # the safer default for read+write. Pulling it in costs ~3MB
+      # and a FUSE dependency.
+      - ntfs-3g
+      # exfat-utils for fsck/mkfs; the kernel handles mounting since
+      # 5.4. Useful when (rarely) we need to repair a stick.
+      - exfatprogs
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create outside-world directory
+  ansible.builtin.file:
+    path: "{{ chimebox_outside_world_dir }}"
+    state: directory
+    owner: "{{ chimebox_user }}"
+    group: "{{ chimebox_user }}"
+    # 0755 not 0750: BasiliskII's extfs runs as the chimebox user
+    # (rwx) but we want occasional root-side inspection to be easy
+    # without needing sudo (rx for root via 'other' bits).
+    mode: "0755"
+
+- name: Install chimebox-usb-helper script
+  ansible.builtin.template:
+    src: chimebox-usb-helper.sh.j2
+    dest: /usr/local/sbin/chimebox-usb-helper
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install chimebox-usb-mount@ systemd template unit
+  ansible.builtin.copy:
+    src: chimebox-usb-mount@.service
+    dest: /etc/systemd/system/chimebox-usb-mount@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install chimebox USB udev rule
+  ansible.builtin.copy:
+    src: 99-chimebox-usb.rules
+    dest: /etc/udev/rules.d/99-chimebox-usb.rules
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload udev rules
+
+- name: Flush handlers (reload systemd / udev so changes take effect)
+  ansible.builtin.meta: flush_handlers

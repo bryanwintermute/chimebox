@@ -1,0 +1,255 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-usb-helper
+#
+# Mounts/unmounts a USB block device under the chimebox outside-world
+# directory. Called by chimebox-usb-mount@.service (templated by udev).
+#
+# Usage:
+#   chimebox-usb-helper mount   <kernel-name>   (e.g. sda1, sdb)
+#   chimebox-usb-helper unmount <kernel-name>
+#
+# Design notes (informed by the rubber-duck critique on this role):
+#
+#  - We probe `blkid` with retries because udev's `add` event can
+#    fire before the kernel finishes the filesystem probe, especially
+#    on slow / cheap sticks.
+#
+#  - The volume label is treated as untrusted input (it's filesystem
+#    metadata controlled by whoever last formatted the stick). We
+#    sanitize aggressively to a small character set and append part
+#    of the UUID for uniqueness.
+#
+#  - We whitelist filesystem types. ext4/HFS/exotic things on a USB
+#    stick headed for a kid's emulator is almost certainly a mistake.
+#
+#  - Removable-media mount opts include nosuid,nodev,noexec for
+#    defense-in-depth. sync,dirsync reduce (NOT eliminate) the
+#    yank-corruption window for FAT-family filesystems.
+#
+#  - On unmount, we try a polite umount first; only if that fails do
+#    we escalate to `umount -l`. Lazy unmount cannot save writes
+#    after physical removal -- it's a cleanup-of-mountpoint helper,
+#    not a data-safety mechanism.
+
+set -u
+shopt -s nocasematch
+
+CMD="${1:-}"
+DEV="${2:-}"
+
+OUTSIDE_WORLD_DIR="{{ chimebox_outside_world_dir }}"
+MOUNT_PREFIX="{{ chimebox_outside_world_mount_prefix }}"
+READONLY="{{ chimebox_outside_world_readonly | bool | string | lower }}"
+ALLOWED_FSTYPES=({% for fs in chimebox_outside_world_allowed_fstypes %}"{{ fs }}" {% endfor %})
+
+CHIMEBOX_USER="{{ chimebox_user }}"
+
+LOG_TAG="chimebox-usb"
+
+log() {
+    logger -t "${LOG_TAG}" -- "$*"
+    echo "${LOG_TAG}: $*" >&2
+}
+
+usage() {
+    echo "Usage: $0 {mount|unmount} <kernel-name>" >&2
+    exit 64
+}
+
+[ -z "${CMD}" ] && usage
+[ -z "${DEV}" ] && usage
+
+DEV_PATH="/dev/${DEV}"
+
+# Sanitize an arbitrary string to a kid-Mac-safe path component:
+# allow only [A-Za-z0-9._-], replace anything else with _, collapse
+# consecutive underscores, trim to 24 chars (well under classic Mac
+# OS's 31-char filename limit, leaving room for the UUID suffix).
+sanitize_label() {
+    local raw="$1"
+    local clean
+    clean="$(printf '%s' "${raw}" \
+        | tr -c 'A-Za-z0-9._-' '_' \
+        | tr -s '_' \
+        | sed -E 's/^_+|_+$//g' \
+        | cut -c1-24)"
+    printf '%s' "${clean}"
+}
+
+# Probe blkid with up to 5 retries (2.5s total) to handle slow USB
+# devices whose kernel-side filesystem probe lags udev's `add` event.
+probe_blkid() {
+    local field="$1"
+    local i
+    for i in 1 2 3 4 5; do
+        local val
+        val="$(blkid -o value -s "${field}" "${DEV_PATH}" 2>/dev/null || true)"
+        if [ -n "${val}" ]; then
+            printf '%s' "${val}"
+            return 0
+        fi
+        sleep 0.5
+    done
+    return 1
+}
+
+# Build the mount-path basename for a given partition.
+build_mount_name() {
+    local label uuid clean uuid8
+    label="$(blkid -o value -s LABEL "${DEV_PATH}" 2>/dev/null || true)"
+    uuid="$(blkid -o value -s UUID "${DEV_PATH}" 2>/dev/null || true)"
+    clean="$(sanitize_label "${label}")"
+    uuid8="$(printf '%s' "${uuid}" | tr -d '-' | cut -c1-8)"
+    if [ -n "${clean}" ] && [ -n "${uuid8}" ]; then
+        printf '%s%s-%s' "${MOUNT_PREFIX}" "${clean}" "${uuid8}"
+    elif [ -n "${clean}" ]; then
+        printf '%s%s' "${MOUNT_PREFIX}" "${clean}"
+    elif [ -n "${uuid8}" ]; then
+        printf '%s%s' "${MOUNT_PREFIX}" "${uuid8}"
+    else
+        # Fallback: kernel name. Should be very rare.
+        printf '%s%s' "${MOUNT_PREFIX}" "${DEV}"
+    fi
+}
+
+# Pick mount options for a given filesystem. nosuid,nodev,noexec
+# are always applied (defense in depth -- removable media should
+# not be a way to introduce setuid binaries or device nodes).
+# sync,dirsync are FAT-family only (they're already implicit-ish
+# for ntfs-3g and exfat's kernel driver doesn't honor them).
+mount_opts_for() {
+    local fstype="$1"
+    local uid gid base
+    uid="$(id -u "${CHIMEBOX_USER}" 2>/dev/null || echo 0)"
+    gid="$(id -g "${CHIMEBOX_USER}" 2>/dev/null || echo 0)"
+    base="nosuid,nodev,noexec"
+    case "${fstype}" in
+        vfat)
+            echo "${base},uid=${uid},gid=${gid},umask=0022,iocharset=utf8,sync,dirsync"
+            ;;
+        exfat)
+            echo "${base},uid=${uid},gid=${gid},umask=0022,iocharset=utf8"
+            ;;
+        ntfs|ntfs3)
+            # Bookworm has both kernel ntfs3 and userspace ntfs-3g.
+            # Either accepts uid/gid/umask in the same form.
+            echo "${base},uid=${uid},gid=${gid},umask=0022"
+            ;;
+        *)
+            echo "${base}"
+            ;;
+    esac
+}
+
+is_allowed_fstype() {
+    local fs="$1"
+    local allowed
+    for allowed in "${ALLOWED_FSTYPES[@]}"; do
+        [ "${fs}" = "${allowed}" ] && return 0
+    done
+    return 1
+}
+
+cmd_mount() {
+    if [ ! -b "${DEV_PATH}" ]; then
+        log "device ${DEV_PATH} is not a block device; nothing to mount"
+        exit 0
+    fi
+
+    local fstype
+    fstype="$(probe_blkid TYPE || true)"
+    if [ -z "${fstype}" ]; then
+        log "no filesystem detected on ${DEV_PATH}; ignoring"
+        exit 0
+    fi
+
+    if ! is_allowed_fstype "${fstype}"; then
+        log "filesystem '${fstype}' on ${DEV_PATH} not in allowlist; ignoring"
+        exit 0
+    fi
+
+    local mount_name mount_path opts
+    mount_name="$(build_mount_name)"
+    mount_path="${OUTSIDE_WORLD_DIR}/${mount_name}"
+    opts="$(mount_opts_for "${fstype}")"
+    if [ "${READONLY}" = "true" ]; then
+        opts="${opts},ro"
+    fi
+
+    # If the mount point already exists and is a mountpoint, we're
+    # likely seeing a duplicate udev event. Bail out cleanly.
+    if mountpoint -q "${mount_path}" 2>/dev/null; then
+        log "${mount_path} is already a mountpoint; nothing to do"
+        exit 0
+    fi
+
+    mkdir -p "${mount_path}"
+    chown "${CHIMEBOX_USER}:${CHIMEBOX_USER}" "${mount_path}" 2>/dev/null || true
+
+    if mount -t "${fstype}" -o "${opts}" "${DEV_PATH}" "${mount_path}"; then
+        log "mounted ${DEV_PATH} (${fstype}) at ${mount_path} [${opts}]"
+    else
+        log "FAILED to mount ${DEV_PATH} (${fstype}) at ${mount_path} [${opts}]"
+        rmdir "${mount_path}" 2>/dev/null || true
+        exit 1
+    fi
+}
+
+cmd_unmount() {
+    # We re-derive the mount path from blkid metadata; if the device
+    # is gone (yanked), blkid returns nothing and we fall back to
+    # scanning outside-world for any mount that originated from this
+    # kernel name.
+    local mount_path
+    if [ -b "${DEV_PATH}" ]; then
+        mount_path="${OUTSIDE_WORLD_DIR}/$(build_mount_name)"
+    else
+        # Find the mountpoint by source kernel name in /proc/mounts.
+        mount_path="$(awk -v src="${DEV_PATH}" \
+            '$1 == src {print $2; exit}' /proc/mounts)"
+    fi
+
+    if [ -z "${mount_path}" ] || [ ! -d "${mount_path}" ]; then
+        log "no mountpoint found for ${DEV_PATH}; nothing to do"
+        exit 0
+    fi
+
+    # Try a polite umount first.
+    if umount "${mount_path}" 2>/dev/null; then
+        log "unmounted ${mount_path}"
+        rmdir "${mount_path}" 2>/dev/null || true
+        exit 0
+    fi
+
+    # Polite umount failed -- typically because the device was
+    # physically yanked and the kernel has stale references, or
+    # because something has files open. Lazy unmount frees the
+    # mountpoint without forcing currently-open file handles.
+    # NOTE: this does NOT make in-flight writes safe; it's a
+    # mountpoint-cleanup mechanism, not a data-protection one.
+    if umount -l "${mount_path}" 2>/dev/null; then
+        log "lazy-unmounted ${mount_path} (device may have been yanked)"
+        # Defer rmdir until the mount actually goes away. Loop a few
+        # times because lazy umount completes asynchronously.
+        local i
+        for i in 1 2 3 4 5; do
+            if ! mountpoint -q "${mount_path}" 2>/dev/null; then
+                rmdir "${mount_path}" 2>/dev/null || true
+                exit 0
+            fi
+            sleep 0.5
+        done
+        log "mountpoint ${mount_path} still busy after lazy unmount; leaving in place"
+        exit 0
+    fi
+
+    log "FAILED to unmount ${mount_path} (both polite and lazy)"
+    exit 1
+}
+
+case "${CMD}" in
+    mount)   cmd_mount   ;;
+    unmount) cmd_unmount ;;
+    *)       usage       ;;
+esac

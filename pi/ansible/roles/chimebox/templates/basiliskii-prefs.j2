@@ -73,7 +73,15 @@ seriala
 serialb
 ether
 udptunnel false
+{# extfs is a single-value pref (NOT a list like 'disk'). Emit either
+   a path (when outside-world is enabled and the directory exists) or
+   a blank value to keep the slot present but unused. Never emit
+   both. #}
+{% if chimebox_outside_world_enabled | default(false) | bool and chimebox_outside_world_dir is defined %}
+extfs {{ chimebox_outside_world_dir }}
+{% else %}
 extfs
+{% endif %}
 
 # Defaults
 bootdrive 0

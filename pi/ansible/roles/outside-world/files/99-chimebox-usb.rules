@@ -1,0 +1,31 @@
+# udev rule: when a USB block-device partition (or whole-disk filesystem)
+# arrives, ask systemd to mount it via our template unit.
+#
+# Filter rationale (per the rubber-duck pass on this design):
+#   SUBSYSTEM=="block"        -- only block devices (the udev firehose
+#                                otherwise includes input, sound, etc.).
+#   ENV{ID_BUS}=="usb"        -- only physically-USB-attached storage.
+#                                Excludes the NVMe boot drive and anything
+#                                via SATA/SAS that happens to share sd*
+#                                naming.
+#   ENV{DEVTYPE}=="partition" -- partitioned media, the common case.
+#   The second rule covers the rarer "filesystem on whole disk with no
+#   partition table" case (some Mac-formatted sticks, some camera media).
+#
+# The TAG+="systemd" + ENV{SYSTEMD_WANTS}+="..." pattern is the modern
+# (systemd-recommended) way to fire a service from udev. Avoid
+# RUN+="systemctl ..." -- that path is fragile and breaks under
+# systemd's expectations about udev event handling.
+#
+# %k expands to the kernel device name (e.g. "sda1", "sdb"); the
+# template unit interprets that as the device to mount.
+
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", \
+    ENV{DEVTYPE}=="partition", \
+    TAG+="systemd", \
+    ENV{SYSTEMD_WANTS}+="chimebox-usb-mount@%k.service"
+
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", \
+    ENV{DEVTYPE}=="disk", ENV{ID_FS_TYPE}!="", \
+    TAG+="systemd", \
+    ENV{SYSTEMD_WANTS}+="chimebox-usb-mount@%k.service"

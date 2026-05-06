@@ -133,3 +133,11 @@ chimebox_argon_one_v3: false
 chimebox_disable_screen_blanking: true
 chimebox_hide_host_cursor: true
 chimebox_disable_usb_boot: false # opt-in; some setups still need USB boot
+
+# Outside-World feature: a host directory appears as a folder on the
+# Mac OS desktop (via BasiliskII's extfs), and USB sticks plugged into
+# the Pi auto-mount as sub-folders inside it. Default ON because it's
+# inert if no USB sticks are inserted -- the user just gets an empty
+# "outside-world" folder on the Mac. Opt out by setting to false in
+# host_vars/<host>.yml. See roles/outside-world/README.md.
+chimebox_outside_world_enabled: true
