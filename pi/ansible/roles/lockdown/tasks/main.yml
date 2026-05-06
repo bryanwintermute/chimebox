@@ -11,8 +11,10 @@
           Option "DontVTSwitch" "true"
           Option "DontZap" "true"
       EndSection
-  # TODO: Validate that DontVTSwitch is honored on Pi 5 with the modesetting
-  # driver. Some configs ignore it. If so, mask getty@ttyN units explicitly.
+  # `DontVTSwitch` may not be strictly honored under modesetting on
+  # Pi 5; we don't depend on it. The "Mask unused getty TTYs" task
+  # below is the actual belt-and-braces guard against accidental
+  # VT switching by an inquisitive kid.
 
 - name: Mask unused getty TTYs
   ansible.builtin.systemd:

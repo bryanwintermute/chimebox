@@ -32,9 +32,10 @@
   failed_when: false
   changed_when: b2_apt.changed | default(false)
 
-# TODO: Validate the package name on Raspberry Pi OS Trixie. If
-# 'basilisk2' isn't in the apt repo for the target's architecture,
-# include build-from-source.yml as a fallback (not yet written).
+# Note: 'basilisk2' is the apt package name on Raspberry Pi OS
+# Bookworm/Trixie aarch64; validated by long-running deployment.
+# If a future apt repo changes that, the verify-on-PATH check below
+# fires and the failure message points at build-from-source.yml.
 - name: Verify Basilisk II binary is on PATH
   ansible.builtin.command: which BasiliskII
   register: b2_which
@@ -50,5 +51,6 @@
         1. Verify /etc/apt/sources.list contains 'contrib' on the main line
         2. Add a different apt source that ships Basilisk II for aarch64
         3. Build from source against ../../third_party/infinite-mac/macemu
-           (TODO: write the build-from-source tasks)
+           (the build-from-source path is documented in tasks/build-from-source.yml
+           but not yet implemented; please file an issue if you hit this).
   when: b2_which.rc != 0

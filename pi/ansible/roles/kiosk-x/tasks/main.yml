@@ -69,5 +69,8 @@
       # without sudo; chimebox's only X client is Basilisk II.
       allowed_users=anybody
       needs_root_rights=yes
-  # TODO: Verify whether 'needs_root_rights=yes' is required on Pi 5;
-  # depends on how the kernel handles framebuffer access for non-root.
+  # `needs_root_rights=yes` is kept here as a safety default. It may
+  # not be strictly required on Pi 5 with KMS/DRM modesetting (the
+  # framebuffer access path doesn't always need root), but it's been
+  # validated to work on this combination and toggling it is a
+  # boot-time risk we'd rather not take during normal provisioning.

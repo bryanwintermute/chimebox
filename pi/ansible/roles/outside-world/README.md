@@ -109,8 +109,9 @@ work on BasiliskII; that's on the backlog as a separate task.
 - **Edit existing files in place** on the Mac (open existing file,
   edit, save back to same name) appears to work — only fresh
   Save-As-into-extfs is affected.
-- For new content, **prefer apps that save reliably** (Kid Pix
-  confirmed; others are TODO to characterize).
+- For new content, **prefer apps that save reliably**. Kid Pix is
+  confirmed working; a comprehensive per-app compatibility matrix
+  is tracked as future work.
 
 ### Cross-mount move = "disk error"
 
