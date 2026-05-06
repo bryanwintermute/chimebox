@@ -46,7 +46,7 @@ chimebox_emulator: "BasiliskII"
 #   "native-sharp" -- 1920x1080 X canvas, 1920x1080 BasiliskII window
 #                  matched. Edge-to-edge, sharp, but Mac OS 8.1 menus
 #                  and icons end up small. Probably not what you want
-#                  for a 6.5-year-old.
+#                  for a young first-computer user.
 #
 # Override per-host in host_vars/<hostname>.yml.
 chimebox_display_profile: pillarbox

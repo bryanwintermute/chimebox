@@ -2,7 +2,7 @@
 
 This document maps software in the Infinite Mac library
 (`third_party/infinite-mac/Library/`) onto recommendations for a
-chimebox kiosk targeting a young user (~6.5 years old). It captures
+chimebox kiosk targeting a young user. It captures
 the "what to put on the Desktop" decision and reasoning.
 
 It also notes platform implications: which titles hint at whether
@@ -130,7 +130,7 @@ Trash                               ← built-in
 ```
 
 Eight to ten icons. Anything more is clutter. The full library lives
-on `Infinite HD` (which she can browse if she wants) but doesn't need
+on `Infinite HD` (which the kid can browse if they want) but doesn't need
 to be on the kiosk Desktop.
 
 ## Platform implications for the chimebox roadmap
@@ -150,7 +150,7 @@ opens up:
 - Quake III Arena
 - Civilization II/III
 
-…all of which are 12+ titles, not 6.5yo titles. **Defer until the
+…all of which are 12+ titles, not titles for a young first-computer user. **Defer until the
 kid is older, or until you want it for yourself.**
 
 ### Mac OS X via PearPC — small library, slow emulator
@@ -159,7 +159,7 @@ About 5 titles in the library are Mac OS X-only (look for the "X"
 suffix: GraphicConverter X, Pixelmator 1.0, Comic Life 1.0.1,
 Audion X, Iconographer X, etc.). Of those, **Comic Life** is genuinely
 kid-friendly (drag photos, build comic strips with speech bubbles —
-perfect for a 7yo). **Pixelmator** is good once she outgrows Kid Pix.
+perfect for the early-elementary range). **Pixelmator** is good once the kid outgrows Kid Pix.
 
 But PearPC is the slowest emulator chimebox supports; the heavy lift
 isn't justified by the small library win. **Defer.**

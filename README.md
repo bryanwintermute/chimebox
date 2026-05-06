@@ -3,7 +3,11 @@
 > A locked-down, internet-free, period-correct retro computing experience on a
 > Raspberry Pi — designed as a young person's first real computer.
 
-**Status:** very early. This README documents intent more than reality.
+**Status:** v1 in active development; works end-to-end on the dev kiosk
+(Mac OS 8.1 boots, supervisor loop survives shutdowns, USB sticks
+auto-mount, snapshots run). Not yet polished for general adoption — see
+the public-release contract in `docs/era-decisions.md` and the
+[ROADMAP](docs/ROADMAP.md) for current state.
 
 ## What is chimebox?
 

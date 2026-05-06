@@ -33,15 +33,17 @@ level. Detail-level implementation lives in code and per-component READMEs.
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Raspberry Pi (chimebox device)                                      │
 │                                                                     │
-│  /home/pi/chimebox/                                                 │
+│  /home/chimebox/chimebox/                                           │
 │    ├── Quadra-650.rom         (user-supplied, never in git)         │
 │    ├── System.dsk             (writable, snapshotted nightly)       │
 │    ├── InfiniteHD.dsk         (read-only)                           │
 │    └── snapshots/             (rolling daily + weekly)              │
 │                                                                     │
-│  systemd: chimebox.service                                          │
+│  v1 supervisor: getty@tty1 autologin -> startx -> start.sh          │
 │    └── X (rootless, single-app)                                     │
 │        └── BasiliskII -fullscreen ...                               │
+│                                                                     │
+│  (chimebox.service is installed but disabled; future v2 scaffold)   │
 │                                                                     │
 │  SSH on management interface (Ethernet / VLAN)                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -91,10 +93,15 @@ Run from the workstation over SSH for day-2 ops:
 
 - `getty@tty1` autologins the kiosk user.
 - The user's shell profile execs `startx` only on `tty1`.
-- `~/.xinitrc` disables screen blanking, hides the host cursor, and execs
-  Basilisk II in fullscreen.
-- `chimebox.service` (systemd, `Restart=always`) supervises the kiosk
-  session. If anything dies, it comes back.
+- `~/.xinitrc` execs `start.sh`, which disables screen blanking,
+  hides the host cursor, and runs Basilisk II in fullscreen
+  inside a supervised while-loop (the loop respawns the emulator
+  on clean exit so Mac OS Special > Shut Down restarts in place
+  rather than tearing down X).
+- `chimebox.service` (systemd) is **installed but disabled** in
+  v1; it's a future scaffold for a fully-systemd-supervised
+  session. The autologin → startx → start.sh chain is the
+  actual v1 supervisor.
 
 ## Design choices and tradeoffs
 

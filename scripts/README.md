@@ -43,7 +43,7 @@ All scripts:
 # Before letting the kid try a fresh app for the first time:
 ./snapshot-now.sh
 
-# Oh no, she deleted the System Folder somehow:
+# Oh no, the kid deleted the System Folder somehow:
 ./kid-reset.sh             # interactive: lists snapshots, asks which one
 
 # You want to apt-update or fix something on the Pi:

@@ -33,7 +33,7 @@
   changed_when: b2_apt.changed | default(false)
 
 # Note: 'basilisk2' is the apt package name on Raspberry Pi OS
-# Bookworm/Trixie aarch64; validated by long-running deployment.
+# Bookworm/Trixie aarch64; validated on the chimebox-dev Pi 5.
 # If a future apt repo changes that, the verify-on-PATH check below
 # fires and the failure message points at build-from-source.yml.
 - name: Verify Basilisk II binary is on PATH
