@@ -70,16 +70,10 @@ unclutter-xfixes --hide-on-touch &
 matchbox-window-manager -use_titlebar no -use_cursor no &
 sleep 1  # let it claim WM ownership before B2 starts
 
-{% if chimebox_recovery_keystroke_enabled | default(false) | bool %}
-# Recovery keystroke binder: watches for Ctrl+Alt+Shift+R (or whatever
-# chimebox_recovery_keystroke is set to) and force-resets BasiliskII
-# via the supervisor loop. xbindkeys is intentionally started AFTER
-# the WM so its key grabs are honored (some WMs can swallow
-# combinations otherwise).
-if command -v xbindkeys >/dev/null 2>&1 && [ -f "${HOME}/.xbindkeysrc" ]; then
-    xbindkeys -f "${HOME}/.xbindkeysrc" -n &
-fi
-{% endif %}
+# Note: the recovery-keystroke role used to start xbindkeys here.
+# That path was superseded by the panic-button role's evdev daemon
+# (a system service, not an X-session client). See
+# docs/v2-panic-button-design.md for the architectural rationale.
 
 # Disable screen blanking/DPMS.
 xset s off

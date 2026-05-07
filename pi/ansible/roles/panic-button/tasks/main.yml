@@ -1,0 +1,108 @@
+---
+# roles/panic-button/tasks/main.yml
+#
+# Install the kernel-level panic-button daemon, replacing the
+# xbindkeys-based recovery-keystroke role. See
+# docs/v2-panic-button-design.md for the architectural rationale.
+#
+# Order of operations matters here:
+#   1. Install the helper scripts (force-reset, emergency-stop)
+#      -- these are the actions the daemon will invoke.
+#   2. Install the daemon, its config, and its systemd unit.
+#   3. Enable + start the service.
+#   4. Tear down the old xbindkeys-based role's artifacts so the
+#      kiosk doesn't run two competing keystroke handlers.
+#
+# (4) is done last because if anything in (1)-(3) fails, we
+# want to leave the partial-fix xbindkeys path in place rather
+# than ending up with neither.
+
+- name: Install python3-evdev
+  ansible.builtin.apt:
+    name:
+      - python3-evdev
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# --- Action helper scripts ---------------------------------------------
+
+- name: Install chimebox-force-reset helper
+  ansible.builtin.copy:
+    src: chimebox-force-reset
+    dest: /usr/local/sbin/chimebox-force-reset
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install chimebox-emergency-stop helper
+  ansible.builtin.template:
+    src: chimebox-emergency-stop.sh.j2
+    dest: /usr/local/sbin/chimebox-emergency-stop
+    owner: root
+    group: root
+    mode: "0750"
+
+# --- Daemon, config, systemd unit --------------------------------------
+
+- name: Install chimebox-panic-daemon
+  ansible.builtin.copy:
+    src: chimebox-panic-daemon
+    dest: /usr/local/sbin/chimebox-panic-daemon
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart chimebox-panic-daemon
+
+- name: Install daemon configuration
+  ansible.builtin.template:
+    src: chimebox-panic-daemon.conf.j2
+    dest: /etc/chimebox-panic-daemon.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart chimebox-panic-daemon
+
+- name: Install chimebox-panic-daemon systemd unit
+  ansible.builtin.copy:
+    src: chimebox-panic-daemon.service
+    dest: /etc/systemd/system/chimebox-panic-daemon.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart chimebox-panic-daemon
+
+- name: Enable and start chimebox-panic-daemon
+  ansible.builtin.systemd:
+    name: chimebox-panic-daemon.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# --- Tear down the deprecated recovery-keystroke role ------------------
+# These files were installed by the older xbindkeys-based path. They
+# don't actively conflict (xbindkeys' grabs simply lose to the daemon
+# in any race), but keeping two competing handlers is confusing for
+# debuggers and bloats the kiosk. Remove cleanly.
+
+- name: Stop xbindkeys if it's running
+  ansible.builtin.command: pkill -x xbindkeys
+  register: xbindkeys_kill
+  changed_when: xbindkeys_kill.rc == 0
+  failed_when: false
+
+- name: Remove old recovery-keystroke artifacts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ chimebox_home }}/.xbindkeysrc"
+    - /etc/sudoers.d/chimebox-recovery
+
+- name: Remove xbindkeys package (no longer used)
+  ansible.builtin.apt:
+    name: xbindkeys
+    state: absent
+    autoremove: true

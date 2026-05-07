@@ -1,0 +1,50 @@
+[Unit]
+Description=chimebox panic-button daemon (kernel-level keystroke watcher)
+Documentation=man:chimebox-panic-daemon(8)
+# We need /dev/input/event* populated. multi-user.target ensures
+# udev has settled. We don't depend on X.
+After=multi-user.target
+After=systemd-udevd.service
+# Crash-loop protection: if the daemon dies more than 10 times in
+# 60 seconds, give up. (StartLimit* keys belong in [Unit], not
+# [Service] -- systemd warns at parse time if misplaced.)
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/chimebox-panic-daemon
+Restart=always
+RestartSec=2
+
+# Hardening. The daemon needs:
+#   - Read access to /dev/input/event* (already satisfied by
+#     running as root)
+#   - Permission to fork/exec the action scripts
+#   - Permission for those scripts (which run with the daemon's
+#     privileges) to send signals
+# It does NOT need: filesystem write access, network, new
+# privileges, etc.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# CapabilityBoundingSet limits what the daemon (and its action
+# scripts) can do. CAP_KILL is what chimebox-force-reset needs.
+# CAP_SYS_ADMIN is needed for ProtectKernelTunables=true.
+CapabilityBoundingSet=CAP_KILL
+AmbientCapabilities=CAP_KILL
+
+# Logging goes to stderr (journal) and syslog (logger -t).
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

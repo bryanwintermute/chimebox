@@ -1,0 +1,39 @@
+---
+# roles/panic-button/defaults/main.yml
+
+# Master switch. Default ON because the daemon is inert when no
+# magic combo is pressed, costs ~5MB of resident memory, and
+# provides high-value panic-button capability.
+chimebox_panic_button_enabled: true
+
+# The keystroke combo that, when pressed, force-resets BasiliskII.
+# Format is a list of evdev key names; ALL must be held when the
+# trigger key is pressed.
+#
+# Default: Ctrl + Alt + Shift + R (4-modifier combo, impossible
+# to hit by accident; "R for Reset" matches Mac convention).
+#
+# Either left or right of the modifier counts. The trigger key
+# fires the action when transitioned to pressed (value=1).
+chimebox_panic_button_modifiers:
+  - ctrl    # KEY_LEFTCTRL or KEY_RIGHTCTRL
+  - alt     # KEY_LEFTALT or KEY_RIGHTALT
+  - shift   # KEY_LEFTSHIFT or KEY_RIGHTSHIFT
+chimebox_panic_button_trigger: r
+
+# How long all modifiers must be held BEFORE the trigger key
+# is pressed for the combo to fire. Zero means "any duration is
+# fine" (the natural human typing behavior). A short hold-down
+# requirement (e.g., 0.2s) reduces false positives if someone
+# happens to hit the combo while typing.
+chimebox_panic_button_hold_seconds: 0
+
+# Whether to also wire the optional emergency-stop combo. Off
+# by default; when on, the same daemon binds a second combo to
+# /usr/local/sbin/chimebox-emergency-stop.
+chimebox_panic_button_emergency_stop_enabled: false
+chimebox_panic_button_emergency_stop_modifiers:
+  - ctrl
+  - alt
+  - shift
+chimebox_panic_button_emergency_stop_trigger: q

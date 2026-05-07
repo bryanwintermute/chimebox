@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+# {{ ansible_managed }}
+"""chimebox-panic-daemon
+
+Listens to all keyboard-class /dev/input/event* devices and fires
+configured action scripts when specific key combos are pressed.
+
+Why kernel-level evdev (vs. xbindkeys / X-layer hotkeys)?
+
+  - SDL2 kiosks (BasiliskII with SDL_VIDEO_X11_XINPUT2=1) read
+    keyboard events via XInput2 raw-mode, which bypasses classic
+    XGrabKey passive grabs that xbindkeys uses. So keystrokes
+    can be silently consumed by the emulator before xbindkeys
+    sees them. Reading evdev directly puts us *below* X
+    entirely, which means:
+
+    - We see every keystroke regardless of which app has focus.
+    - We survive X server hangs (a real failure mode for a
+      long-running kiosk).
+    - We work even if the kiosk isn't running yet.
+
+This daemon expects to run as root (or any user with read access
+to /dev/input/event* and the right to invoke the configured
+action scripts). The systemd unit hardens it with
+NoNewPrivileges, ProtectSystem=strict, and a tight capability
+set (only CAP_KILL is actually needed, since the action scripts
+SIGKILL processes).
+
+Configuration is read from /etc/chimebox-panic-daemon.conf
+(an INI file) so Ansible's template module can manage it
+without touching this script.
+"""
+
+from __future__ import annotations
+
+import configparser
+import errno
+import logging
+import logging.handlers
+import os
+import select
+import signal
+import subprocess
+import sys
+import time
+from dataclasses import dataclass, field
+from typing import Iterable
+
+try:
+    from evdev import InputDevice, KeyEvent, categorize, ecodes, list_devices
+except ImportError:
+    sys.stderr.write(
+        "chimebox-panic-daemon: python3-evdev is required "
+        "(apt install python3-evdev)\n"
+    )
+    sys.exit(1)
+
+
+CONFIG_PATH = "/etc/chimebox-panic-daemon.conf"
+
+# Map our friendly modifier names to the set of evdev key codes
+# that satisfy them. Either left or right counts.
+MODIFIER_GROUPS = {
+    "ctrl": {ecodes.KEY_LEFTCTRL, ecodes.KEY_RIGHTCTRL},
+    "alt": {ecodes.KEY_LEFTALT, ecodes.KEY_RIGHTALT},
+    "shift": {ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT},
+    "meta": {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA},
+}
+
+
+def setup_logging() -> logging.Logger:
+    """Send everything to syslog under tag 'chimebox-panic'."""
+    logger = logging.getLogger("chimebox-panic")
+    logger.setLevel(logging.INFO)
+
+    handler = logging.handlers.SysLogHandler(address="/dev/log")
+    formatter = logging.Formatter("chimebox-panic: %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # Also echo to stderr when running interactively (systemd
+    # journal will capture this on a non-tty too).
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(logging.Formatter(
+        "%(asctime)s chimebox-panic: %(message)s"
+    ))
+    logger.addHandler(stderr_handler)
+
+    return logger
+
+
+log = setup_logging()
+
+
+@dataclass
+class Combo:
+    """A configured key combination that fires an action script."""
+    name: str
+    modifier_groups: list[str]   # e.g. ["ctrl", "alt", "shift"]
+    trigger_key_code: int        # e.g. ecodes.KEY_R
+    hold_seconds: float          # how long modifiers must be held
+    action: str                  # absolute path to the script
+
+    def required_modifier_codes(self) -> list[set[int]]:
+        """Returns a list of "any-of" sets, one per modifier group."""
+        return [MODIFIER_GROUPS[g] for g in self.modifier_groups]
+
+
+def parse_combos(config: configparser.ConfigParser) -> list[Combo]:
+    """Read [combo:NAME] sections from the config file."""
+    combos: list[Combo] = []
+    for section in config.sections():
+        if not section.startswith("combo:"):
+            continue
+        name = section.split(":", 1)[1]
+        mods = [m.strip().lower() for m in
+                config.get(section, "modifiers").split(",") if m.strip()]
+        unknown = [m for m in mods if m not in MODIFIER_GROUPS]
+        if unknown:
+            log.warning("combo '%s' references unknown modifiers: %s",
+                        name, unknown)
+            continue
+        trigger_name = config.get(section, "trigger").strip().lower()
+        # evdev's ecodes uses uppercase like KEY_R.
+        key_attr = "KEY_" + trigger_name.upper()
+        trigger_code = getattr(ecodes, key_attr, None)
+        if trigger_code is None:
+            log.warning("combo '%s' has unknown trigger key '%s'",
+                        name, trigger_name)
+            continue
+        action = config.get(section, "action").strip()
+        if not os.path.isabs(action):
+            log.warning("combo '%s' action '%s' is not an absolute path",
+                        name, action)
+            continue
+        if not os.access(action, os.X_OK):
+            log.warning("combo '%s' action '%s' is not executable",
+                        name, action)
+            continue
+        hold = config.getfloat(section, "hold_seconds", fallback=0.0)
+        combos.append(Combo(
+            name=name,
+            modifier_groups=mods,
+            trigger_key_code=trigger_code,
+            hold_seconds=hold,
+            action=action,
+        ))
+    return combos
+
+
+def find_keyboard_devices() -> list[InputDevice]:
+    """Return all /dev/input/event* devices that look like keyboards."""
+    devices: list[InputDevice] = []
+    for path in list_devices():
+        try:
+            d = InputDevice(path)
+        except (PermissionError, OSError) as exc:
+            log.debug("skipping %s: %s", path, exc)
+            continue
+        caps = d.capabilities()
+        keys = caps.get(ecodes.EV_KEY, [])
+        # Look for at least one of the alpha keys to filter out
+        # power buttons, lid switches, sleep buttons, etc.
+        if ecodes.KEY_R in keys or ecodes.KEY_A in keys:
+            devices.append(d)
+            log.info("watching keyboard: %s (%s)", d.path, d.name)
+        else:
+            log.debug("ignoring %s (%s) -- no alpha keys", d.path, d.name)
+    return devices
+
+
+@dataclass
+class ModifierState:
+    """Tracks which modifier-group keys are currently held, and when
+    each group's hold started."""
+    held: set[int] = field(default_factory=set)
+    held_since: dict[str, float] = field(default_factory=dict)
+
+    def update(self, key_code: int, value: int) -> None:
+        if value == 1:
+            # press
+            self.held.add(key_code)
+        elif value == 0:
+            # release
+            self.held.discard(key_code)
+        # value == 2 is autorepeat; we don't change state on those.
+
+        # Recompute held_since per group.
+        for group_name, codes in MODIFIER_GROUPS.items():
+            if codes & self.held:
+                self.held_since.setdefault(group_name, time.monotonic())
+            else:
+                self.held_since.pop(group_name, None)
+
+    def all_held(self, group_names: Iterable[str]) -> bool:
+        return all(MODIFIER_GROUPS[g] & self.held for g in group_names)
+
+    def held_for(self, group_names: Iterable[str]) -> float:
+        """Returns the *minimum* hold duration across the requested
+        groups, or 0 if any group is not currently held."""
+        if not self.all_held(group_names):
+            return 0.0
+        starts = [self.held_since[g] for g in group_names
+                  if g in self.held_since]
+        if not starts:
+            return 0.0
+        return time.monotonic() - max(starts)
+
+
+def fire_action(combo: Combo) -> None:
+    log.info("combo '%s' fired -> %s", combo.name, combo.action)
+    try:
+        subprocess.Popen([combo.action], close_fds=True)
+    except OSError as exc:
+        log.error("failed to invoke '%s': %s", combo.action, exc)
+
+
+def event_loop(devices: list[InputDevice], combos: list[Combo]) -> None:
+    if not devices:
+        log.error("no keyboard devices found; daemon will idle")
+        # Idle-loop so systemd doesn't restart-loop us if the
+        # input layer hasn't enumerated yet (boot race).
+        while True:
+            time.sleep(60)
+    if not combos:
+        log.error("no valid combos configured; daemon will idle")
+        while True:
+            time.sleep(60)
+
+    state = ModifierState()
+    fd_to_device = {d.fd: d for d in devices}
+    log.info("entering event loop with %d device(s) and %d combo(s)",
+             len(devices), len(combos))
+
+    while True:
+        try:
+            r, _, _ = select.select(fd_to_device.keys(), [], [], 30.0)
+        except OSError as exc:
+            if exc.errno == errno.EINTR:
+                continue
+            raise
+
+        for fd in r:
+            device = fd_to_device[fd]
+            try:
+                events = list(device.read())
+            except OSError as exc:
+                if exc.errno in (errno.ENODEV, errno.EBADF):
+                    log.warning("device %s went away; removing", device.path)
+                    fd_to_device.pop(fd, None)
+                    try:
+                        device.close()
+                    except Exception:
+                        pass
+                    continue
+                raise
+            for ev in events:
+                if ev.type != ecodes.EV_KEY:
+                    continue
+                key_code = ev.code
+                value = ev.value
+                state.update(key_code, value)
+                if value != 1:
+                    # Combo only fires on the trigger's transition
+                    # to pressed.
+                    continue
+                for combo in combos:
+                    if key_code != combo.trigger_key_code:
+                        continue
+                    if not state.all_held(combo.modifier_groups):
+                        continue
+                    if combo.hold_seconds > 0:
+                        if state.held_for(combo.modifier_groups) < combo.hold_seconds:
+                            log.debug("combo '%s' modifiers held only %.2fs (need %.2fs)",
+                                      combo.name,
+                                      state.held_for(combo.modifier_groups),
+                                      combo.hold_seconds)
+                            continue
+                    fire_action(combo)
+
+
+def main() -> int:
+    config = configparser.ConfigParser()
+    if not config.read(CONFIG_PATH):
+        log.error("config file %s not found", CONFIG_PATH)
+        return 1
+
+    combos = parse_combos(config)
+    log.info("parsed %d combo(s)", len(combos))
+    for c in combos:
+        log.info("  combo '%s': %s + KEY_%s -> %s (hold=%.2fs)",
+                 c.name, "+".join(c.modifier_groups),
+                 ecodes.keys[c.trigger_key_code].replace("KEY_", ""),
+                 c.action, c.hold_seconds)
+
+    devices = find_keyboard_devices()
+
+    # Cleanly exit on SIGTERM / SIGINT so systemd stops us nicely.
+    def _shutdown(signum, _frame):
+        log.info("got signal %d; exiting", signum)
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
+    try:
+        event_loop(devices, combos)
+    except Exception:
+        log.exception("fatal error in event loop")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

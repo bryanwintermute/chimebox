@@ -1,0 +1,33 @@
+# {{ ansible_managed }}
+# /etc/chimebox-panic-daemon.conf
+#
+# Each [combo:NAME] section defines one keystroke combination
+# that fires an action script. The daemon watches all keyboard
+# /dev/input/event* devices for these combos directly at the
+# kernel input layer (below X), so it works regardless of which
+# window has focus or whether X is running at all.
+#
+# Modifiers: comma-separated list from: ctrl, alt, shift, meta.
+#   Either left or right side of each modifier counts.
+# Trigger:   single key name (e.g., 'r', 'q', 'space').
+#   Combo fires on the press transition (key down) of the
+#   trigger key while ALL listed modifiers are held.
+# Action:    absolute path to an executable to invoke.
+# hold_seconds: optional float; require modifiers held for at
+#   least this long before the trigger key is pressed.
+#   Default 0 = any duration. Useful to reduce false positives
+#   if you ever bind a less-obscure combo.
+
+[combo:force-reset]
+modifiers   = {{ chimebox_panic_button_modifiers | join(', ') }}
+trigger     = {{ chimebox_panic_button_trigger }}
+action      = /usr/local/sbin/chimebox-force-reset
+hold_seconds = {{ chimebox_panic_button_hold_seconds }}
+
+{% if chimebox_panic_button_emergency_stop_enabled | bool %}
+[combo:emergency-stop]
+modifiers   = {{ chimebox_panic_button_emergency_stop_modifiers | join(', ') }}
+trigger     = {{ chimebox_panic_button_emergency_stop_trigger }}
+action      = /usr/local/sbin/chimebox-emergency-stop
+hold_seconds = {{ chimebox_panic_button_hold_seconds }}
+{% endif %}
