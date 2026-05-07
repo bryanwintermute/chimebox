@@ -1,5 +1,18 @@
 # role: recovery-keystroke
 
+> ⚠️ **Status (2026-05-06): partial fix, superseded by v2 plan.**
+>
+> The xbindkeys-based approach in this role works **only when no
+> Mac OS window is focused** — e.g., when the Desktop is in front.
+> When a Finder window or any input-consuming app is focused,
+> SDL2's XInput2 raw-mode reads consume the keystroke before
+> xbindkeys can catch it. See `docs/v2-panic-button-design.md`
+> for the full diagnosis and the planned evdev-based replacement.
+>
+> This role is kept in place as a partial fallback. The
+> `chimebox-force-reset` helper script it installs is reused by
+> the upcoming evdev daemon.
+
 Binds a deliberately-obscure keystroke combo inside the kiosk X
 session. When pressed, the magic combo force-resets the emulated
 Mac without needing SSH access. The supervisor loop in start.sh

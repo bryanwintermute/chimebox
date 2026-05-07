@@ -92,8 +92,18 @@ xset s noblank
 #   doing focus-follows-mouse.
 # - SDL_VIDEO_X11_XINPUT2: prefer the XInput2 protocol for pointer
 #   events. (Already default in modern SDL2 but safe to be explicit.)
+# - SDL_GRAB_KEYBOARD=0 / SDL_HINT_KEYBOARD_GRAB=0: do NOT call
+#   XGrabKeyboard for exclusive keyboard input. SDL's default
+#   fullscreen behavior is to grab the keyboard, which preempts
+#   xbindkeys' XGrabKey root-grab and breaks the recovery
+#   keystroke (Ctrl+Alt+Shift+R force-reset). For a kiosk where
+#   the only X client is BasiliskII anyway, there's no other window
+#   that could "steal" keys -- the grab gives nothing, and costs
+#   the panic button. Always disable.
 export SDL_MOUSE_FOCUS_CLICKTHROUGH=1
 export SDL_VIDEO_X11_XINPUT2=1
+export SDL_GRAB_KEYBOARD=0
+export SDL_HINT_KEYBOARD_GRAB=0
 
 # Center the Basilisk II window inside the X canvas. Only meaningful when
 # the emulator's screen size is smaller than the X display (e.g. a 4:3
