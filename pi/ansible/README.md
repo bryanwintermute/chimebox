@@ -36,13 +36,17 @@ The playbook orchestrates these roles in order:
 
 | Role | Purpose |
 |---|---|
-| `base` | apt update/upgrade, set timezone, ensure aarch64 + Bookworm |
+| `base` | apt update/upgrade, set timezone, ensure aarch64 + Trixie |
 | `kiosk-user` | Create the unprivileged `chimebox` user that runs the kiosk |
 | `basiliskii` | Install Basilisk II (apt or build-from-source fallback) |
 | `kiosk-x` | Install minimal X server, no desktop environment |
-| `chimebox` | Install runtime files: start.sh, .xinitrc, systemd unit |
+| `chimebox` | Install runtime files: start.sh (supervisor loop), .xinitrc, BasiliskII prefs, systemd unit |
 | `persistence` | Install snapshot cron, reset/service-mode helpers |
 | `lockdown` | Disable screen blanking, host cursor, USB autoboot, etc. |
+| `argon-one-v3` | (opt-in) Install Argon One V3 case fan daemon + EEPROM tweaks |
+| `boot-splash` | (opt-in) Plymouth splash replacing Linux boot text |
+| `outside-world` | (opt-in) Host-folder-as-Mac-volume + USB stick auto-mount |
+| `panic-button` | (opt-in) Below-X evdev daemon for force-reset / emergency-stop combos |
 
 Each role is documented in `roles/<name>/README.md`.
 

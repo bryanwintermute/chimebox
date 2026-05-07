@@ -3,97 +3,247 @@
 > A locked-down, internet-free, period-correct retro computing experience on a
 > Raspberry Pi — designed as a young person's first real computer.
 
-**Status:** v1 in active development; works end-to-end on the dev kiosk
-(Mac OS 8.1 boots, supervisor loop survives shutdowns, USB sticks
-auto-mount, snapshots run). Not yet polished for general adoption — see
-the public-release contract in `docs/era-decisions.md` and the
-[ROADMAP](docs/ROADMAP.md) for current state.
+## Status
+
+**v1 in active development.** On one dev Pi 5 kiosk, chimebox boots
+directly into Mac OS 8.1, respawns the emulator after guest shutdown,
+auto-mounts USB sticks as Mac volumes, and has bedtime / panic-button /
+snapshot machinery installed and exercised in regular use.
+
+Not yet validated through real handoff to a child user, and not yet
+polished for one-shot adoption by strangers. See [Status & rough
+edges](#status--rough-edges) below for an honest read on what to expect.
 
 ## What is chimebox?
 
-Chimebox turns a Raspberry Pi into a single-purpose retro computer kiosk. It
-boots straight into a classic operating system running in an emulator,
-fullscreen, with no visible host OS. From the user's perspective, it's just an
-old computer. From an administrator's perspective, it's a normal Linux box you
-can SSH into to maintain.
+Chimebox turns a Raspberry Pi into a single-purpose retro computer kiosk.
+It boots straight into a classic operating system running in an emulator,
+fullscreen, with no visible host OS. From the user's perspective, it's
+just an old computer. From an administrator's perspective, it's a normal
+Linux box you can SSH into to maintain.
 
-The first supported environment is **Mac OS 8.1** running in **Basilisk II**,
-chosen for its sweet spot of color graphics, a well-known kid-friendly software
-catalog (KidPix, MacPaint, HyperCard, Oregon Trail, Lemmings, etc.), and
-mature, stable native emulation on `aarch64`.
+The first supported environment is **Mac OS 8.1** running in **Basilisk
+II** on a Pi 5 — chosen for its sweet spot of color graphics, a
+well-known kid-friendly software catalog (Kid Pix, MacPaint, HyperCard,
+Oregon Trail, Lemmings, etc.), and mature native emulation on `aarch64`.
+The architecture is emulator-agnostic; future configurations (early
+Windows in DOSBox, Amiga in FS-UAE, Apple II in MAME) are on the roadmap.
+
+## Who is this for?
+
+- **Parents / aunts / uncles** who want to give a young child a real
+  first computer instead of yet another tablet, with full adult
+  oversight and no internet exposure.
+- **Retro computing tinkerers** who want a turnkey kiosk built on
+  reproducible Ansible bones, where the Pi-and-emulator integration
+  work is already done.
+- **Kiosk-pattern enthusiasts** who'd like a clean, well-documented
+  Ansible+systemd+X11 reference for headless single-app appliances.
+
+If you're looking for a one-click consumer product, this isn't it (and
+might never be). If you're comfortable on a Linux command line and
+willing to flash a Pi from scratch, it's well within reach.
+
+## Quickstart
+
+**You'll need:**
+
+- A Raspberry Pi 5 with active cooling, a microSD or NVMe drive, and a
+  display + USB keyboard/mouse for first boot.
+- A workstation with `ansible` installed and `git`.
+- **macOS for v1 disk preparation.** Linux disk-prep is on the roadmap.
+- A legally obtained **Quadra 650 ROM** placed at
+  `disks/Quadra-650.rom`.
+- The `third_party/infinite-mac` submodule initialized (see step 1).
+
+**End-to-end setup has five steps; the longest two have dedicated
+walkthroughs.**
+
+1. **Clone with submodules**:
+   ```sh
+   git clone --recurse-submodules https://github.com/bryanwintermute/chimebox.git
+   ```
+
+2. **Pi first-boot setup** — flash Pi OS Trixie Lite, configure SSH,
+   reach the Pi from your workstation. See [`pi/SETUP.md`](./pi/SETUP.md).
+
+3. **Disk preparation** — builds/fetches `System.dsk` (Mac OS 8.1 boot
+   disk) and `InfiniteHD.dsk` (curated library) on your workstation.
+   The fast path uses prebuilt chunks from the infinitemac.org CDN and
+   completes in ~90 seconds. You provide the ROM. See
+   [`disk-prep/README.md`](./disk-prep/README.md).
+
+4. **Provision the Pi** — from `pi/ansible/`, copy
+   `inventory.example.ini` to `inventory.ini`, edit for your Pi, and
+   run `ansible-playbook -i inventory.ini playbook.yml`.
+
+5. **Push disks to the Pi** — `cd scripts && cp config.example.sh
+   config.sh` (edit for your Pi), then `./push-disks.sh`. Reboot the Pi.
+   It comes up as a chimebox.
+
+Day-2 ops scripts (bedtime, snapshot, kid-reset, service-mode) live in
+[`scripts/`](./scripts/). See
+[`scripts/README.md`](./scripts/README.md) for the full list.
+
+## Highlights
+
+What makes chimebox distinct from "just run an emulator on a Pi":
+
+- **Pi provisioning in one idempotent Ansible playbook** — so rebuilding
+  a Pi is boring instead of artisanal.
+- **Calm boot experience** — a custom Plymouth theme replaces the
+  rainbow-firmware-splash + scrolling-kernel-text + login-flicker chain
+  with a single quiet image, so the kid never sees Linux boot noise.
+- **Smooth in-place restart** — when the emulated guest shuts down, X
+  stays up and the supervisor respawns the emulator within ~1.5s. No
+  teardown, no flicker. Crash-loop protection prevents runaway
+  respawns.
+- **Bedtime / wake-up cycle** — `scripts/bedtime.sh` with a
+  configurable warning period sends a SIGTERM the guest receives as a
+  shutdown dialog, so the kid retains agency over a graceful exit.
+- **Below-X evdev panic button** — Ctrl+Alt+Shift+R force-resets the
+  emulator from a small daemon that reads `/dev/input/event*` directly.
+  Works even when the guest app aggressively grabs input. Audit log
+  for every fire.
+- **Snapshot + reset** — nightly cron-driven snapshots of the user
+  disk with rolling retention. `scripts/kid-reset.sh` restores from a
+  chosen snapshot when something gets broken.
+- **"Outside World" host folder** — a host directory appears on the
+  guest desktop as a network volume; USB sticks auto-mount as
+  sub-folders on insertion, so adults can move files in/out without
+  giving the guest internet.
+- **Guest networking disabled by default** — so offline is the
+  default, not a policy you have to remember.
 
 ## Why?
 
-Modern computing experiences hide everything interesting behind glossy, locked-
-down app stores and walled gardens. They also come with cameras, microphones,
-trackers, ads, and a one-click bridge to the entire internet — none of which a
-small child should have to navigate to learn what a computer *is*.
+Modern computing experiences hide everything interesting behind glossy,
+locked-down app stores and walled gardens. They also come with cameras,
+microphones, trackers, ads, and a one-click bridge to the entire
+internet — none of which a small child should have to navigate to learn
+what a computer *is*.
 
-A retro Mac, by contrast:
+A retro Mac, in this configuration:
 
 - has a real, visible file system
-- has no internet capability worth speaking of
+- ships with guest networking disabled
 - has no advertising, no autoplay, no notifications
-- has a curated catalog of decades-old software, much of it educational and
-  delightful, all of which works offline
+- has a curated catalog of decades-old software, much of it educational
+  and delightful, all of which works offline
 - breaks gracefully — there's no "this app needs an update" loop
 
-Chimebox is built for a young family member to grow up with one of these
-machines as a first computer, alongside whatever modern devices they
-eventually use.
+For the design rationale and trade-offs (era choice, hardware, distro,
+emulator, period-correct exception policy, when-to-revisit triggers),
+see [`docs/era-decisions.md`](./docs/era-decisions.md).
 
-## What's in the box
+## Status & rough edges
 
-A typical chimebox deployment consists of:
+**Implemented and working on the dev kiosk:**
 
-- A **Raspberry Pi 5** (or similar) running Raspberry Pi OS Lite, headless,
-  no desktop environment.
-- A **kiosk session** that boots straight into a fullscreen emulator window
-  with no escape to the host.
-- A **prepared disk image** with a curated software library, built once on a
-  separate workstation.
-- An **administrator back door** over SSH for the responsible adult to manage
-  the machine.
+- Automatic boot directly into Mac OS 8.1.
+- Emulator respawn after guest shutdown.
+- Below-X panic-button reset (validated under Mac OS error trap loops).
+- USB Outside World mounting (validated end-to-end).
+- Bedtime / wake-up script flow (validated through several real
+  bedtime cycles).
+- Snapshot machinery installed and running on cron.
+
+**Still being validated before real handoff:**
+
+- Snapshot / reset round-trip under deliberate damage.
+- Power-yank chaos test.
+- The final curated kid-shortlist on the Desktop.
+- Belt-and-suspenders no-egress firewall verification.
+
+**Known limitations (documented in role READMEs):**
+
+- Some Mac apps (e.g., SimpleText) silently fail saves into the
+  Outside World extfs volume; others (Kid Pix) work fine. Workaround:
+  save to Macintosh HD first, then drag into Outside World.
+- Cross-mount drag-within-Unix-volume returns EXDEV → Mac shows "disk
+  error". Workaround: hold Option to force copy semantics.
+- Disk-prep on Linux is not yet supported; macOS is required for
+  building images.
+- `chimebox.service` (systemd) is installed but disabled in v1; the
+  active supervisor is the autologin → startx → start.sh chain.
 
 ## Repository layout
 
 ```
 chimebox/
-├── docs/              ← Architecture, era decisions, ops runbooks, recovery
-├── disk-prep/         ← Tools that run on a workstation to build the disk image
-├── pi/                ← Ansible playbook and roles to provision the Pi
-├── scripts/           ← Operational scripts (push disks, snapshot, reset)
-├── disks/             ← .gitignored — local-only ROMs and disk images
-├── LICENSE            ← Apache 2.0
-├── LICENSING.md       ← Per-component licensing, including upstream projects
-└── NOTICE             ← Apache 2.0 attribution to upstream projects
+├── docs/                 ← Architecture, era decisions, design docs, runbooks
+├── disk-prep/            ← Tools that run on a workstation to build the disk image
+├── pi/
+│   ├── SETUP.md          ← Pi first-boot walkthrough
+│   └── ansible/          ← Provisioning playbook + roles (one role per concern)
+├── scripts/              ← Operational scripts (push disks, snapshot, reset, bedtime, …)
+├── third_party/
+│   └── infinite-mac/     ← Submodule; init with `git submodule update --init --recursive`
+├── disks/                ← .gitignored — local-only ROMs and disk images
+├── LICENSE               ← Apache 2.0
+├── LICENSING.md          ← Per-component licensing, including upstream projects
+└── NOTICE                ← Apache 2.0 attribution to upstream projects
 ```
 
-## Quickstart
+## Documentation
 
-Not yet — this is a scaffold. See `docs/architecture.md` for what's coming.
+The `docs/` tree has the substantive thinking behind chimebox.
+Different docs serve different audiences:
+
+**If you want to build one:**
+
+- [`pi/SETUP.md`](./pi/SETUP.md) — Pi first-boot walkthrough.
+- [`disk-prep/README.md`](./disk-prep/README.md) — Building the disk
+  images on your workstation.
+- [`pi/ansible/README.md`](./pi/ansible/README.md) — Playbook overview
+  and tunables.
+- [`scripts/README.md`](./scripts/README.md) — Day-2 operational
+  scripts.
+
+**If you want the design rationale:**
+
+- [`docs/era-decisions.md`](./docs/era-decisions.md) — *Why* of every
+  major design choice (era, OS, ROM, hardware, distro, network
+  posture, kid-experience principles, exception policy).
+- [`docs/architecture.md`](./docs/architecture.md) — *How* the live
+  system fits together.
+- [`docs/shortlist.md`](./docs/shortlist.md) — Tier-ranked guide to the
+  Mac OS software library.
+- [`docs/ROADMAP.md`](./docs/ROADMAP.md) — What's next; current state
+  per area.
+- Future design docs under `docs/`:
+  [v2 inter-chimebox AppleTalk](./docs/v2-appletalk-design.md),
+  [v2 printer bridge](./docs/v2-printer-bridge-design.md),
+  [v2 panic-button](./docs/v2-panic-button-design.md),
+  [v3 modern-protocol bridge appliance](./docs/v3-bridge-appliance-design.md).
+
+Per-role READMEs under `pi/ansible/roles/<role>/README.md` document
+each component in depth.
 
 ## Acknowledgements
 
-Chimebox stands on the shoulders of years of work by the retro computing
-community. Most directly, it draws on:
+Chimebox stands on the shoulders of years of work by the retro
+computing community. Most directly, it draws on:
 
-- **[Infinite Mac](https://github.com/mihaip/infinite-mac)** by Mihai Parparita
-  (Apache 2.0) — the disk-build pipeline, machine and disk definitions, and
-  curated Macintosh Garden manifests are invaluable starting points.
-- **[Basilisk II](https://basilisk.cebix.net/)** and the **macemu** family of
-  emulators (GPL v2).
+- **[Infinite Mac](https://github.com/mihaip/infinite-mac)** by Mihai
+  Parparita (Apache 2.0) — the disk-build pipeline, machine and disk
+  definitions, and curated Macintosh Garden manifests are invaluable
+  starting points.
+- **[Basilisk II](https://basilisk.cebix.net/)** and the **macemu**
+  family of emulators (GPL v2).
 - **[Macintosh Garden](https://macintoshgarden.org/)** — without their
   abandonware preservation work, there would be no software to load.
 
-See [`NOTICE`](./NOTICE) for full attributions and [`LICENSING.md`](./LICENSING.md)
-for the layered licensing situation around code, ROMs, and disk images.
+See [`NOTICE`](./NOTICE) for full attributions and
+[`LICENSING.md`](./LICENSING.md) for the layered licensing situation
+around code, ROMs, and disk images.
 
 ## License
 
-Source code in this repository is licensed under the **Apache License 2.0**.
-See [`LICENSE`](./LICENSE).
+Source code in this repository is licensed under the **Apache License
+2.0**. See [`LICENSE`](./LICENSE).
 
-ROMs, system disk images, and other Apple-copyrighted material are **not** part
-of this repository and must be obtained by the user. See `LICENSING.md` and
-`disks/README.md`.
+ROMs, system disk images, and other Apple-copyrighted material are
+**not** part of this repository and must be obtained by the user. See
+[`LICENSING.md`](./LICENSING.md) and
+[`disks/README.md`](./disks/README.md).

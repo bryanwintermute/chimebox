@@ -41,9 +41,12 @@ checksum will be documented in `disk-prep/` once the build pipeline lands.
 
 ## How to build the disks
 
-See [`../disk-prep/README.md`](../disk-prep/README.md) (coming soon — the
-disk-prep tooling is the next chunk of work after this scaffold).
+See [`../disk-prep/README.md`](../disk-prep/README.md) for the full
+walkthrough. The fast path uses prebuilt chunks from the
+infinitemac.org CDN and produces both disk images in ~90 seconds on
+a recent Mac. The slow path runs the full Infinite Mac upstream
+build pipeline locally.
 
-In short: clone Infinite Mac alongside chimebox, run its `import-disks`
-pipeline on a Mac, then run our `disk-prep/curate.sh` to apply chimebox-
-specific tweaks (kid-shortlist on Desktop, hidden Developer/, etc.).
+In short: clone with submodules so `third_party/infinite-mac` is
+populated, then run the disk-prep tooling. ROM is user-supplied and
+not built by the pipeline.
