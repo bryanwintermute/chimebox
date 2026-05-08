@@ -15,6 +15,12 @@ chimebox_home: "/home/{{ chimebox_user }}"
 chimebox_runtime_dir: "{{ chimebox_home }}/chimebox"
 chimebox_snapshots_dir: "{{ chimebox_runtime_dir }}/snapshots"
 chimebox_logs_dir: "{{ chimebox_runtime_dir }}/logs"
+# Operator-blessed factory baseline. Lives OUTSIDE the rotating
+# snapshots dir so 'chimebox-reset latest' never picks it up,
+# the daily/weekly cron never overwrites it, and only the
+# explicit 'chimebox-snapshot factory' command (or workstation
+# scripts/factory-bless.sh) modifies it.
+chimebox_factory_disk: "{{ chimebox_runtime_dir }}/factory.dsk"
 
 # Disk image filenames (must match what scripts/push-disks.sh sends)
 chimebox_rom_filename: "Quadra-650.rom"
@@ -109,14 +115,14 @@ chimebox_snapshot_minute: 17     # offset from the hour to avoid the rush
 #
 # Future v2 values (planned):
 #   "restart-with-rollback" -- on Mac shutdown, restore System.dsk
-#                from a factory.dsk baseline (NOT the cron 'latest'
-#                snapshot, which can capture in-flight state) before
-#                restart. Becomes a "panic button" for the kid.
-#                Requires (a) a robust shutdown discriminator (BasiliskII
-#                exits 0 on fatal errors too, so rc alone isn't safe)
-#                and (b) a separate factory snapshot type taken at
-#                push-disks time. See roles/chimebox/README for the
-#                full design notes.
+#                from factory.dsk before restart. Becomes a "panic
+#                button" for the kid. The factory baseline support
+#                exists today (chimebox-snapshot factory /
+#                chimebox-reset factory / scripts/factory-bless.sh
+#                / scripts/factory-reset.sh); what's missing is a
+#                robust shutdown discriminator, since BasiliskII
+#                exits 0 on fatal errors too, so rc alone isn't
+#                safe to use as a "kid asked for shutdown" signal.
 #   "poweroff" -- Mac shutdown -> Pi systemctl poweroff. Needs
 #                sudoers entry for chimebox user.
 #   "reboot"   -- Mac shutdown -> Pi reboot (cycles back through

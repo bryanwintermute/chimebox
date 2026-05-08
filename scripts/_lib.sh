@@ -55,7 +55,12 @@ chimebox_check_reachable() {
     # forwarding, which would make an SSH-agent-managed key (e.g.
     # 1Password) appear unavailable even when it actually works for
     # subsequent calls.
-    if ! ssh "${CHIMEBOX_SSH_OPTS[@]}" -o ConnectTimeout=5 \
+    #
+    # -n attaches /dev/null to ssh's stdin so we don't drain the
+    # parent script's stdin. Without it, scripts run non-interactively
+    # (pipes, heredocs, automation) lose their stdin to this probe and
+    # any subsequent `read` sees EOF.
+    if ! ssh -n "${CHIMEBOX_SSH_OPTS[@]}" -o ConnectTimeout=5 \
             "${CHIMEBOX_ADMIN_USER}@${CHIMEBOX_SSH_HOST}" 'true' 2>/dev/null; then
         fail "Cannot reach ${CHIMEBOX_ADMIN_USER}@${CHIMEBOX_SSH_HOST}.
   Check that the Pi is up and your SSH key is authorized.

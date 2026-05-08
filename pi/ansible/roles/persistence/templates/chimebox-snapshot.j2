@@ -1,17 +1,51 @@
 #!/bin/bash
 # {{ ansible_managed }}
 # chimebox-snapshot -- snapshot the kiosk System.dsk.
-# Usage: chimebox-snapshot [daily|weekly|manual]
+# Usage: chimebox-snapshot [daily|weekly|manual|factory]
+#
+# daily/weekly/manual:
+#   Write a timestamped copy into the rotating snapshots dir.
+#   daily and weekly trim oldest beyond their retention count.
+#
+# factory:
+#   Bless the current System.dsk as the factory baseline. Writes
+#   to ${FACTORY_DISK} (outside the rotating dir), chmod 0440 so
+#   accidental writes are blocked. There is exactly one factory
+#   image; re-blessing replaces it. Operator-driven only -- never
+#   invoked by cron. Use scripts/factory-bless.sh from a
+#   workstation for the kiosk-stop/start dance, or run this
+#   directly on the Pi if the kiosk is already stopped.
 
 set -euo pipefail
 
 KIND="${1:-manual}"
 RUNTIME_DIR="{{ chimebox_runtime_dir }}"
 SNAP_DIR="{{ chimebox_snapshots_dir }}"
+FACTORY_DISK="{{ chimebox_factory_disk }}"
 SOURCE="${RUNTIME_DIR}/{{ chimebox_system_disk_filename }}"
 KEEP_DAILY={{ chimebox_snapshot_keep_daily }}
 KEEP_WEEKLY={{ chimebox_snapshot_keep_weekly }}
 
+# 'factory' is special: writes outside the rotating snapshots dir,
+# no rotation, chmod read-only after write. Hard-fails on missing
+# source (operator-driven only -- not invoked from cron).
+if [ "${KIND}" = "factory" ]; then
+    if [ ! -f "${SOURCE}" ]; then
+        echo "chimebox-snapshot factory: source ${SOURCE} missing; cannot bless" >&2
+        exit 1
+    fi
+    cp --reflink=auto "${SOURCE}" "${FACTORY_DISK}.tmp"
+    mv "${FACTORY_DISK}.tmp" "${FACTORY_DISK}"
+    chown "{{ chimebox_user }}:{{ chimebox_user }}" "${FACTORY_DISK}"
+    chmod 0440 "${FACTORY_DISK}"
+    echo "chimebox-snapshot: blessed ${FACTORY_DISK} as factory baseline"
+    echo "  (read-only; re-bless with 'chimebox-snapshot factory' to update)"
+    exit 0
+fi
+
+# Rotating-snapshot path (daily/weekly/manual): exits 0 silently
+# on missing source so the daily cron doesn't error on an
+# unprovisioned chimebox.
 if [ ! -f "${SOURCE}" ]; then
     echo "chimebox-snapshot: nothing to snapshot ($SOURCE missing)" >&2
     exit 0
@@ -23,7 +57,7 @@ case "${KIND}" in
     daily)   PREFIX="daily";   STAMP="$(date +%Y-%m-%d)";;
     weekly)  PREFIX="weekly";  STAMP="$(date +%Y-W%V)";;
     manual)  PREFIX="manual";  STAMP="$(date +%Y-%m-%d-%H%M%S)";;
-    *)       echo "unknown kind: ${KIND}" >&2; exit 2;;
+    *)       echo "unknown kind: ${KIND} (expected: daily, weekly, manual, factory)" >&2; exit 2;;
 esac
 
 DEST="${SNAP_DIR}/${PREFIX}-${STAMP}.dsk"

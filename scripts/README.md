@@ -21,6 +21,8 @@ chmod +x config.sh
 | `push-disks.sh` | Rsync prepared disks (`../disks/`) to the Pi | Once after disk-prep, or any time disks change |
 | `snapshot-now.sh` | Trigger a manual snapshot of `System.dsk` | Before risky changes; ad hoc |
 | `kid-reset.sh` | Restore `System.dsk` from a chosen snapshot | When something goes wrong on the Pi side |
+| `factory-bless.sh` | Capture current `System.dsk` as the factory baseline | After milestones (curation, kid-shortlist setup); operator-blessed |
+| `factory-reset.sh` | Restore `System.dsk` from the factory baseline | When even rotating snapshots have captured corruption |
 | `service-mode.sh` | Stop the kiosk for maintenance, give you a shell, restart on exit | Whenever you need to poke at the Pi while it's running |
 | `mouse-mode.sh` | Toggle BasiliskII between relative-mouse (kiosk default) and absolute mode (PiKVM/VNC/tablet) | When switching between physical and remote input setups |
 | `bedtime.sh` | Politely ask the Mac to shut down (`SIGTERM` triggers the Mac OS shutdown dialog), wait N minutes, then stop the kiosk | End of day |
@@ -46,6 +48,12 @@ All scripts:
 # Oh no, the kid deleted the System Folder somehow:
 ./kid-reset.sh             # interactive: lists snapshots, asks which one
 
+# After kid-shortlist curation is the way you want it long-term:
+./factory-bless.sh         # capture this state as the factory baseline
+
+# Even the daily snapshots have captured the problem:
+./factory-reset.sh         # roll back to the factory baseline
+
 # You want to apt-update or fix something on the Pi:
 ./service-mode.sh          # opens a shell on the Pi with the kiosk paused
                            # exit the shell -> kiosk resumes
@@ -59,19 +67,33 @@ All scripts:
 ./wake-up.sh
 ```
 
-## Recovery triggers — three paths
+## Recovery triggers — three layers
 
-There are three distinct ways to recover from a chimebox in
-trouble, each suited to a different situation. They overlap in
-some cases on purpose.
+There are three layered ways to recover from a chimebox in
+trouble, escalating in scope. Each is suited to a different
+situation; they overlap on purpose.
 
-### 1. Workstation SSH (`scripts/kid-reset.sh`) — adult, has a laptop nearby
+### 1. Workstation SSH — the operator's primary tools
 
-The classic path documented above: run `./kid-reset.sh latest`
-(or interactive) from your workstation. Stops the kiosk, restores
-`System.dsk` from the chosen snapshot, restarts the kiosk. Works
-for both "kid damaged the disk" and "kid did something benign that
-the adult wants to undo." ~30 seconds end-to-end.
+| Script | What it restores from |
+|---|---|
+| `scripts/kid-reset.sh latest` | The most recent rotating snapshot (daily/weekly/manual) |
+| `scripts/kid-reset.sh <name>` | A specific named snapshot |
+| `scripts/factory-reset.sh` | The operator-blessed factory baseline (kept outside the rotation; never auto-overwritten) |
+
+`scripts/factory-bless.sh` is the operator-driven companion to
+`factory-reset.sh`: it captures the **current** `System.dsk` as
+the factory baseline. Run it after curation milestones (e.g.,
+the kid-shortlist desktop is the way you want it long-term) so
+"factory reset" is a meaningful "back to the version I shipped"
+rollback. Re-blessing replaces the prior baseline.
+
+The factory image lives at `~chimebox/chimebox/factory.dsk` —
+**outside** the snapshots dir, chmod 0440 read-only — so the
+daily/weekly cron and `kid-reset latest` never see it. Both
+properties are deliberate: the factory baseline must survive
+the cycle of rotating snapshots that may have captured the
+problem you're trying to undo.
 
 ### 2. Kiosk keyboard hotkey (panic-button daemon) — adult shoulder-surfing the kid
 
@@ -84,11 +106,15 @@ supported, each off-or-on independently:
 |---|---|---|
 | `Ctrl+Alt+Shift+R` | Force-reset the emulator (SIGKILL BasiliskII; supervisor respawns) | Mac OS is wedged in a system-error trap loop; doesn't touch `System.dsk` |
 | `Ctrl+Alt+Shift+Q` (opt-in) | Full kiosk teardown (equivalent to `bedtime.sh 0`) | "I really want it OFF now" |
-| `Ctrl+Alt+Shift+Z` (opt-in, hold 1.5s) | **Restore `System.dsk` from the latest snapshot.** Same effect as `kid-reset.sh latest`, just from the kiosk keyboard | Adult notices the kid is about to do something irreversible; wants to roll back without grabbing a laptop |
+| `Ctrl+Alt+Shift+Z` (opt-in, hold 1.5s) | **Restore `System.dsk` from the latest rotating snapshot.** Same effect as `kid-reset.sh latest`, just from the kiosk keyboard | Adult notices the kid is about to do something irreversible; wants to roll back without grabbing a laptop |
 
 The hold-time gate on the destructive combo (`Z`) is the safety
 mechanism — a kid mashing random key combinations can't stumble
 into a rollback.
+
+There is no factory-reset hotkey, by design: factory rollback
+loses arbitrary amounts of state, so it requires the deliberate
+SSH-from-workstation path with a typed confirmation phrase.
 
 Enable the opt-in combos in your host_vars (see
 [`pi/ansible/roles/panic-button/README.md`](../pi/ansible/roles/panic-button/README.md)

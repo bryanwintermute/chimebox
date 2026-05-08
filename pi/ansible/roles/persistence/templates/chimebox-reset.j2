@@ -4,12 +4,14 @@
 # Usage:
 #   chimebox-reset list
 #   chimebox-reset latest                         # most recent snapshot
+#   chimebox-reset factory                        # operator-blessed baseline
 #   chimebox-reset <snapshot-filename-in-snap-dir>
 
 set -euo pipefail
 
 RUNTIME_DIR="{{ chimebox_runtime_dir }}"
 SNAP_DIR="{{ chimebox_snapshots_dir }}"
+FACTORY_DISK="{{ chimebox_factory_disk }}"
 SYSTEM_DISK="${RUNTIME_DIR}/{{ chimebox_system_disk_filename }}"
 
 usage() {
@@ -17,11 +19,13 @@ usage() {
 Usage:
     chimebox-reset list
     chimebox-reset latest
+    chimebox-reset factory
     chimebox-reset <snapshot-filename>
 
 Examples:
     chimebox-reset list
     chimebox-reset latest
+    chimebox-reset factory
     chimebox-reset daily-2026-04-25.dsk
 EOF
     exit 2
@@ -33,6 +37,12 @@ case "$1" in
     list)
         echo "Snapshots in ${SNAP_DIR}:"
         ls -lh "${SNAP_DIR}" 2>/dev/null | tail -n +2 || echo "  (none)"
+        echo
+        if [ -f "${FACTORY_DISK}" ]; then
+            echo "Factory baseline: $(ls -lh "${FACTORY_DISK}" | awk '{print $5, $6, $7, $8, $9}')"
+        else
+            echo "Factory baseline: (none -- run 'chimebox-snapshot factory' to bless)"
+        fi
         ;;
     latest)
         SNAP="$(ls -1t "${SNAP_DIR}"/*.dsk 2>/dev/null | head -1 || true)"
@@ -46,6 +56,19 @@ case "$1" in
         mv "${SYSTEM_DISK}.tmp" "${SYSTEM_DISK}"
         chown "{{ chimebox_user }}:{{ chimebox_user }}" "${SYSTEM_DISK}"
         echo "chimebox-reset: restored ${SYSTEM_DISK}"
+        ;;
+    factory)
+        if [ ! -f "${FACTORY_DISK}" ]; then
+            echo "No factory baseline at ${FACTORY_DISK}" >&2
+            echo "Run 'chimebox-snapshot factory' on the Pi (or scripts/factory-bless.sh from your workstation) to bless current state." >&2
+            exit 1
+        fi
+        echo "Restoring from factory baseline: ${FACTORY_DISK}"
+        echo "(Stop the kiosk first if it's running, e.g. 'systemctl stop chimebox' or kill BasiliskII)"
+        cp --reflink=auto "${FACTORY_DISK}" "${SYSTEM_DISK}.tmp"
+        mv "${SYSTEM_DISK}.tmp" "${SYSTEM_DISK}"
+        chown "{{ chimebox_user }}:{{ chimebox_user }}" "${SYSTEM_DISK}"
+        echo "chimebox-reset: restored ${SYSTEM_DISK} from factory baseline"
         ;;
     -h|--help)
         usage
