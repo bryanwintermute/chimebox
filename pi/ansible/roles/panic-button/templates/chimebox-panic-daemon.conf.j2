@@ -10,13 +10,17 @@
 # Modifiers: comma-separated list from: ctrl, alt, shift, meta.
 #   Either left or right side of each modifier counts.
 # Trigger:   single key name (e.g., 'r', 'q', 'space').
-#   Combo fires on the press transition (key down) of the
-#   trigger key while ALL listed modifiers are held.
+#   Combo fires while ALL listed modifiers are held and the
+#   trigger key is pressed. It fires once per trigger-key press
+#   (releasing and re-pressing the trigger arms it again).
 # Action:    absolute path to an executable to invoke.
 # hold_seconds: optional float; require modifiers held for at
-#   least this long before the trigger key is pressed.
-#   Default 0 = any duration. Useful to reduce false positives
-#   if you ever bind a less-obscure combo.
+#   least this long while the trigger key is also pressed
+#   before the combo fires. Default 0 = fire immediately on
+#   trigger press. Use a value like 1.5 as a "long-press" gate
+#   for destructive actions: the user can mash all keys at
+#   once and the combo will only fire after holding for the
+#   gate duration.
 
 [combo:force-reset]
 modifiers   = {{ chimebox_panic_button_modifiers | join(', ') }}
@@ -30,4 +34,12 @@ modifiers   = {{ chimebox_panic_button_emergency_stop_modifiers | join(', ') }}
 trigger     = {{ chimebox_panic_button_emergency_stop_trigger }}
 action      = /usr/local/sbin/chimebox-emergency-stop
 hold_seconds = {{ chimebox_panic_button_hold_seconds }}
+{% endif %}
+
+{% if chimebox_panic_button_kid_reset_enabled | bool %}
+[combo:kid-reset]
+modifiers   = {{ chimebox_panic_button_kid_reset_modifiers | join(', ') }}
+trigger     = {{ chimebox_panic_button_kid_reset_trigger }}
+action      = /usr/local/sbin/chimebox-reset-latest
+hold_seconds = {{ chimebox_panic_button_kid_reset_hold_seconds }}
 {% endif %}

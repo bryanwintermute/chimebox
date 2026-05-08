@@ -1,0 +1,72 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-reset-latest
+#
+# Wrap chimebox-reset with a hardcoded `latest` argument, plus
+# the kiosk-stop / kiosk-restart sequence that scripts/kid-reset.sh
+# does on the workstation side. This is the kernel-input-layer
+# equivalent of "operator runs scripts/kid-reset.sh latest from
+# their workstation," but invocable directly from the chimebox
+# keyboard via the panic daemon.
+#
+# Use case: an adult shoulder-surfing the kid notices the Mac is
+# in a state where the kid's drawings are at risk (deleted System
+# Folder, accidental empty-Trash before save, etc.) and wants a
+# "undo to last snapshot" button. Hold Ctrl+Alt+Shift+Z for
+# ~1.5s and this fires.
+#
+# This is DESTRUCTIVE: any state in the running Mac since the
+# latest snapshot is overwritten. The hold-time gate in the
+# panic daemon's combo config is the safety mechanism. There is
+# no in-emulator confirmation dialog (would be platform-
+# specific and add complexity).
+#
+# If no snapshots exist (extremely rare; an unprovisioned chimebox
+# or one where the snapshot dir was wiped), this exits cleanly
+# with an explanatory log line rather than touching System.dsk.
+
+set -u
+
+LOG_TAG="chimebox-reset-latest"
+log() {
+    logger -t "${LOG_TAG}" -- "$*"
+    echo "${LOG_TAG}: $*" >&2
+}
+
+SNAP_DIR="{{ chimebox_snapshots_dir }}"
+LATEST_SNAP="$(ls -1t "${SNAP_DIR}"/*.dsk 2>/dev/null | head -1)"
+
+if [ -z "${LATEST_SNAP}" ]; then
+    log "no snapshots found in ${SNAP_DIR}; refusing to touch System.dsk"
+    exit 0
+fi
+
+log "kid-reset combo fired; restoring System.dsk from ${LATEST_SNAP}"
+
+# Match scripts/kid-reset.sh's stop-restart pattern. Use systemctl
+# stop on the parent unit (getty@tty1) rather than killing the
+# kiosk processes individually -- the supervisor loop in start.sh
+# handles its own children correctly when getty goes away.
+systemctl stop getty@tty1.service || true
+
+# Give the kiosk a moment to tear down its writes to System.dsk
+# before the chimebox-reset cp overwrites it. 1 second matches
+# the workstation script's pause.
+sleep 1
+
+# /usr/local/sbin/chimebox-reset is the existing helper (same one
+# scripts/kid-reset.sh invokes via SSH). It does the cp/mv/chown.
+if /usr/local/sbin/chimebox-reset latest; then
+    log "chimebox-reset completed successfully"
+else
+    rc=$?
+    log "chimebox-reset failed rc=${rc}; restarting kiosk anyway so the user isn't stuck"
+fi
+
+# Always restart the kiosk, even if the reset failed. A failed
+# reset leaves the prior System.dsk in place; the kiosk will
+# come back up on the (possibly damaged) prior state, which
+# is no worse than not running this combo at all.
+systemctl start getty@tty1.service
+
+exit 0

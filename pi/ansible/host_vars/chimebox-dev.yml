@@ -11,3 +11,8 @@ chimebox_argon_one_v3: true
 # profile so PiKVM works; the local-monitor display becomes 1024x768
 # stretched to fill the screen, which is fine for development.
 chimebox_display_profile: matched-stretched
+
+# Opt the dev kiosk into the kid-reset panic-daemon combo so we can
+# validate it end-to-end. Default for general users is off; we enable
+# explicitly here.
+chimebox_panic_button_kid_reset_enabled: true

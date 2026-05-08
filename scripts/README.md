@@ -59,6 +59,52 @@ All scripts:
 ./wake-up.sh
 ```
 
+## Recovery triggers — three paths
+
+There are three distinct ways to recover from a chimebox in
+trouble, each suited to a different situation. They overlap in
+some cases on purpose.
+
+### 1. Workstation SSH (`scripts/kid-reset.sh`) — adult, has a laptop nearby
+
+The classic path documented above: run `./kid-reset.sh latest`
+(or interactive) from your workstation. Stops the kiosk, restores
+`System.dsk` from the chosen snapshot, restarts the kiosk. Works
+for both "kid damaged the disk" and "kid did something benign that
+the adult wants to undo." ~30 seconds end-to-end.
+
+### 2. Kiosk keyboard hotkey (panic-button daemon) — adult shoulder-surfing the kid
+
+The `panic-button` Ansible role installs a kernel-input-layer
+daemon that catches specific key combinations regardless of which
+window has focus or whether X is responsive. Three combos are
+supported, each off-or-on independently:
+
+| Combo | Action | When to use |
+|---|---|---|
+| `Ctrl+Alt+Shift+R` | Force-reset the emulator (SIGKILL BasiliskII; supervisor respawns) | Mac OS is wedged in a system-error trap loop; doesn't touch `System.dsk` |
+| `Ctrl+Alt+Shift+Q` (opt-in) | Full kiosk teardown (equivalent to `bedtime.sh 0`) | "I really want it OFF now" |
+| `Ctrl+Alt+Shift+Z` (opt-in, hold 1.5s) | **Restore `System.dsk` from the latest snapshot.** Same effect as `kid-reset.sh latest`, just from the kiosk keyboard | Adult notices the kid is about to do something irreversible; wants to roll back without grabbing a laptop |
+
+The hold-time gate on the destructive combo (`Z`) is the safety
+mechanism — a kid mashing random key combinations can't stumble
+into a rollback.
+
+Enable the opt-in combos in your host_vars (see
+[`pi/ansible/roles/panic-button/README.md`](../pi/ansible/roles/panic-button/README.md)
+for full details).
+
+### 3. Auto-detection (planned, not yet implemented)
+
+A future enhancement to the panic-button daemon: detect a wedged
+Mac (BasiliskII at >90% CPU + no input received + screen
+unchanged for N seconds) and auto-fire the force-reset action.
+Tracked as `detect-wedged-mac` in the backlog. **Note this is
+distinct from kid-reset:** auto-detection handles the
+"emulator wedged" case, not the "kid damaged the disk" case.
+Disk damage requires explicit human judgment to invoke
+(an auto-rollback could lose work the kid wanted to keep).
+
 ## Why scripts AND Ansible?
 
 - **Ansible** handles configuration that should be the same on every

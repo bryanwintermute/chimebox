@@ -43,6 +43,14 @@
     group: root
     mode: "0750"
 
+- name: Install chimebox-reset-latest helper
+  ansible.builtin.template:
+    src: chimebox-reset-latest.sh.j2
+    dest: /usr/local/sbin/chimebox-reset-latest
+    owner: root
+    group: root
+    mode: "0750"
+
 # --- Daemon, config, systemd unit --------------------------------------
 
 - name: Install chimebox-panic-daemon

@@ -171,18 +171,26 @@ def find_keyboard_devices() -> list[InputDevice]:
 
 @dataclass
 class ModifierState:
-    """Tracks which modifier-group keys are currently held, and when
-    each group's hold started."""
+    """Tracks which modifier-group keys are currently held, when each
+    group's hold started, and which combos have already fired for the
+    current press of each trigger key."""
     held: set[int] = field(default_factory=set)
     held_since: dict[str, float] = field(default_factory=dict)
+    # trigger key_code -> set of combo names that have already fired
+    # since this trigger's last press transition. Cleared on release
+    # so a fresh press can fire the combo again.
+    fired_for_trigger: dict[int, set[str]] = field(default_factory=dict)
 
     def update(self, key_code: int, value: int) -> None:
         if value == 1:
             # press
             self.held.add(key_code)
+            # Fresh press: any prior fired-marker for this key is stale.
+            self.fired_for_trigger.pop(key_code, None)
         elif value == 0:
             # release
             self.held.discard(key_code)
+            self.fired_for_trigger.pop(key_code, None)
         # value == 2 is autorepeat; we don't change state on those.
 
         # Recompute held_since per group.
@@ -191,6 +199,12 @@ class ModifierState:
                 self.held_since.setdefault(group_name, time.monotonic())
             else:
                 self.held_since.pop(group_name, None)
+
+    def has_fired(self, trigger_code: int, combo_name: str) -> bool:
+        return combo_name in self.fired_for_trigger.get(trigger_code, set())
+
+    def mark_fired(self, trigger_code: int, combo_name: str) -> None:
+        self.fired_for_trigger.setdefault(trigger_code, set()).add(combo_name)
 
     def all_held(self, group_names: Iterable[str]) -> bool:
         return all(MODIFIER_GROUPS[g] & self.held for g in group_names)
@@ -260,12 +274,21 @@ def event_loop(devices: list[InputDevice], combos: list[Combo]) -> None:
                 key_code = ev.code
                 value = ev.value
                 state.update(key_code, value)
-                if value != 1:
-                    # Combo only fires on the trigger's transition
-                    # to pressed.
+                # Fire combos on the trigger's press (value=1) OR
+                # while it's still held (autorepeat, value=2). The
+                # autorepeat path is what makes hold_seconds work
+                # naturally when the user mashes all keys at once:
+                # the combo fires as soon as the modifiers have
+                # been held long enough, even if the trigger went
+                # down before the threshold elapsed. We use
+                # state.fired_for_trigger to ensure a single press
+                # fires each combo at most once.
+                if value not in (1, 2):
                     continue
                 for combo in combos:
                     if key_code != combo.trigger_key_code:
+                        continue
+                    if state.has_fired(key_code, combo.name):
                         continue
                     if not state.all_held(combo.modifier_groups):
                         continue
@@ -277,6 +300,7 @@ def event_loop(devices: list[InputDevice], combos: list[Combo]) -> None:
                                       combo.hold_seconds)
                             continue
                     fire_action(combo)
+                    state.mark_fired(key_code, combo.name)
 
 
 def main() -> int:

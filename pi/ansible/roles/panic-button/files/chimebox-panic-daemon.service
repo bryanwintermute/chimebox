@@ -21,13 +21,18 @@ RestartSec=2
 #   - Read access to /dev/input/event* (already satisfied by
 #     running as root)
 #   - Permission to fork/exec the action scripts
-#   - Permission for those scripts (which run with the daemon's
-#     privileges) to send signals
-# It does NOT need: filesystem write access, network, new
-# privileges, etc.
+#   - For force-reset: send signals to BasiliskII (CAP_KILL)
+#   - For kid-reset: read+write /home/chimebox/chimebox (snapshot
+#     dir + System.dsk) and chown the restored disk image
+#     (CAP_CHOWN). This is why ProtectHome is off and why
+#     CAP_CHOWN is in the bounding set.
+# It does NOT need: arbitrary filesystem writes, network,
+# new privileges, etc.
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+# ProtectHome is intentionally OFF: kid-reset needs to read the
+# snapshot dir and overwrite System.dsk, both under /home.
+ProtectHome=false
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
@@ -37,10 +42,21 @@ RestrictRealtime=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 # CapabilityBoundingSet limits what the daemon (and its action
-# scripts) can do. CAP_KILL is what chimebox-force-reset needs.
-# CAP_SYS_ADMIN is needed for ProtectKernelTunables=true.
-CapabilityBoundingSet=CAP_KILL
-AmbientCapabilities=CAP_KILL
+# scripts) can do.
+#   CAP_KILL            -- chimebox-force-reset / chimebox-emergency-stop
+#                          send signals to BasiliskII
+#   CAP_CHOWN           -- chimebox-reset chowns the restored
+#                          System.dsk back to chimebox:chimebox
+#   CAP_DAC_READ_SEARCH -- traverse 0750 chimebox-owned dirs as root
+#                          (the daemon runs as root but, with a
+#                          restricted bounding set, can't bypass
+#                          DAC checks on dirs it doesn't own/group)
+#   CAP_DAC_OVERRIDE    -- read snapshots and write System.dsk
+#                          owned by chimebox:chimebox
+#   CAP_FOWNER          -- mv across ownership for the .tmp -> final
+#                          rename in chimebox-reset
+CapabilityBoundingSet=CAP_KILL CAP_CHOWN CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=CAP_KILL CAP_CHOWN CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_FOWNER
 
 # Logging goes to stderr (journal) and syslog (logger -t).
 StandardOutput=journal

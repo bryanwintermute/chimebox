@@ -13,19 +13,21 @@ chimebox_panic_button_enabled: true
 # Default: Ctrl + Alt + Shift + R (4-modifier combo, impossible
 # to hit by accident; "R for Reset" matches Mac convention).
 #
-# Either left or right of the modifier counts. The trigger key
-# fires the action when transitioned to pressed (value=1).
+# Either left or right of the modifier counts. The combo fires
+# while all modifiers AND the trigger key are simultaneously
+# held; it fires once per press of the trigger key.
 chimebox_panic_button_modifiers:
   - ctrl    # KEY_LEFTCTRL or KEY_RIGHTCTRL
   - alt     # KEY_LEFTALT or KEY_RIGHTALT
   - shift   # KEY_LEFTSHIFT or KEY_RIGHTSHIFT
 chimebox_panic_button_trigger: r
 
-# How long all modifiers must be held BEFORE the trigger key
-# is pressed for the combo to fire. Zero means "any duration is
-# fine" (the natural human typing behavior). A short hold-down
-# requirement (e.g., 0.2s) reduces false positives if someone
-# happens to hit the combo while typing.
+# How long all modifiers must be held WHILE the trigger key is
+# also pressed before the combo fires. Zero means "fire on the
+# trigger's press transition" (the natural quick-tap behavior).
+# A nonzero value acts as a long-press gate: mash all keys at
+# once, then keep holding for this duration to actually fire.
+# Used by kid-reset (1.5s) to prevent accidental rollback.
 chimebox_panic_button_hold_seconds: 0
 
 # Whether to also wire the optional emergency-stop combo. Off
@@ -37,3 +39,27 @@ chimebox_panic_button_emergency_stop_modifiers:
   - alt
   - shift
 chimebox_panic_button_emergency_stop_trigger: q
+
+# Whether to also wire the kid-reset combo. Off by default
+# because it's destructive (overwrites current System.dsk with
+# the most recent snapshot, losing any since-snapshot state).
+# When enabled, the combo restores from the latest snapshot
+# the same way scripts/kid-reset.sh does -- but invocable
+# directly from the chimebox keyboard (via the panic daemon's
+# kernel-input-layer reader) rather than over SSH from a
+# workstation.
+#
+# A 1.5-second hold-time gate is applied by default to make
+# accidental fires essentially impossible -- a kid mashing
+# random key combinations cannot stumble into a destructive
+# rollback.
+#
+# Default trigger Ctrl+Alt+Shift+Z ("Z for Undo" -- matches
+# Mac convention).
+chimebox_panic_button_kid_reset_enabled: false
+chimebox_panic_button_kid_reset_modifiers:
+  - ctrl
+  - alt
+  - shift
+chimebox_panic_button_kid_reset_trigger: z
+chimebox_panic_button_kid_reset_hold_seconds: 1.5

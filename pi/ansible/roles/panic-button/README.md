@@ -87,18 +87,60 @@ chimebox_panic_button_emergency_stop_trigger: q
 After that combo is pressed, the kiosk fully shuts down. Use
 `scripts/wake-up.sh` from a workstation to start it again.
 
+## Optional: kid-reset combo (destructive!)
+
+A third combo can be wired to **restore `System.dsk` from the
+most recent snapshot** — the kernel-input-layer equivalent of
+`scripts/kid-reset.sh latest` from a workstation. Use case: an
+adult shoulder-surfing the kid notices the Mac is in a state
+where the kid's drawings are at risk, and wants an "undo to last
+snapshot" button without fishing out an SSH terminal.
+
+This combo is **destructive**: any state in the running Mac
+since the latest snapshot is overwritten. The default trigger is
+Ctrl+Alt+Shift+Z ("Z for Undo", matching Mac convention) with a
+**1.5-second hold-time gate** so a kid mashing random key
+combinations cannot stumble into a destructive rollback.
+
+Off by default; enable in host_vars:
+
+```yaml
+chimebox_panic_button_kid_reset_enabled: true
+# Optional overrides (defaults are sensible):
+chimebox_panic_button_kid_reset_modifiers: [ctrl, alt, shift]
+chimebox_panic_button_kid_reset_trigger: z
+chimebox_panic_button_kid_reset_hold_seconds: 1.5
+```
+
+When the combo fires:
+
+1. Stops the kiosk via `systemctl stop getty@tty1.service` (so
+   no in-flight writes corrupt the snapshot restore).
+2. Runs `chimebox-reset latest` (the same helper
+   `scripts/kid-reset.sh` invokes).
+3. Restarts `getty@tty1.service` so the kiosk comes back up on
+   the restored disk.
+
+Total cycle ~30 seconds, similar to running kid-reset over SSH.
+
+If no snapshots exist (extremely rare), the helper logs a
+clear message and exits cleanly without touching `System.dsk`.
+
 ## Modifier-hold gating
 
 For combos that aren't quite as obscure as 4-modifier, the daemon
-supports requiring all modifiers be **held for N seconds before**
-the trigger key is pressed. Set:
+supports requiring all modifiers and the trigger key be **held
+together for N seconds** before the action fires. Set:
 
 ```yaml
 chimebox_panic_button_hold_seconds: 0.3
 ```
 
-This makes accidental fires from rapid typing essentially
-impossible.
+The user can mash all keys at once; the combo only fires after
+they've been held for `hold_seconds`. This makes accidental fires
+from rapid typing essentially impossible. The kid-reset combo
+uses this with a 1.5s gate so a curious kid can't trigger
+rollback by stumbling onto the combo.
 
 ## Audit trail
 
@@ -133,10 +175,14 @@ For the chimebox-dev kiosk this is a non-issue (PiKVM keyboard
 | `chimebox_panic_button_enabled` | `true` | Master switch |
 | `chimebox_panic_button_modifiers` | `[ctrl, alt, shift]` | Modifier groups for force-reset combo |
 | `chimebox_panic_button_trigger` | `r` | Trigger key for force-reset |
-| `chimebox_panic_button_hold_seconds` | `0` | Optional modifier-hold gating |
+| `chimebox_panic_button_hold_seconds` | `0` | Optional modifier-hold gating for the force-reset combo |
 | `chimebox_panic_button_emergency_stop_enabled` | `false` | Wire the second combo |
 | `chimebox_panic_button_emergency_stop_modifiers` | `[ctrl, alt, shift]` | Modifiers for emergency-stop |
 | `chimebox_panic_button_emergency_stop_trigger` | `q` | Trigger for emergency-stop |
+| `chimebox_panic_button_kid_reset_enabled` | `false` | Wire the destructive kid-reset combo |
+| `chimebox_panic_button_kid_reset_modifiers` | `[ctrl, alt, shift]` | Modifiers for kid-reset |
+| `chimebox_panic_button_kid_reset_trigger` | `z` | Trigger for kid-reset |
+| `chimebox_panic_button_kid_reset_hold_seconds` | `1.5` | Hold-time gate (seconds) for kid-reset |
 
 ## Future enhancements
 
