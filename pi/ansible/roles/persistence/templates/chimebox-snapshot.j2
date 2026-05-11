@@ -18,6 +18,12 @@
 
 set -euo pipefail
 
+LOG_TAG="chimebox-snapshot"
+log() {
+    logger -t "${LOG_TAG}" -- "$*"
+    echo "${LOG_TAG}: $*" >&2
+}
+
 KIND="${1:-manual}"
 RUNTIME_DIR="{{ chimebox_runtime_dir }}"
 SNAP_DIR="{{ chimebox_snapshots_dir }}"
@@ -31,15 +37,15 @@ KEEP_WEEKLY={{ chimebox_snapshot_keep_weekly }}
 # source (operator-driven only -- not invoked from cron).
 if [ "${KIND}" = "factory" ]; then
     if [ ! -f "${SOURCE}" ]; then
-        echo "chimebox-snapshot factory: source ${SOURCE} missing; cannot bless" >&2
+        log "factory: source ${SOURCE} missing; cannot bless"
         exit 1
     fi
     cp --reflink=auto "${SOURCE}" "${FACTORY_DISK}.tmp"
     mv "${FACTORY_DISK}.tmp" "${FACTORY_DISK}"
     chown "{{ chimebox_user }}:{{ chimebox_user }}" "${FACTORY_DISK}"
     chmod 0440 "${FACTORY_DISK}"
-    echo "chimebox-snapshot: blessed ${FACTORY_DISK} as factory baseline"
-    echo "  (read-only; re-bless with 'chimebox-snapshot factory' to update)"
+    log "blessed ${FACTORY_DISK} as factory baseline ($(stat -c %s "${FACTORY_DISK}") bytes)"
+    log "  read-only; re-bless with 'chimebox-snapshot factory' to update"
     exit 0
 fi
 
@@ -47,7 +53,7 @@ fi
 # on missing source so the daily cron doesn't error on an
 # unprovisioned chimebox.
 if [ ! -f "${SOURCE}" ]; then
-    echo "chimebox-snapshot: nothing to snapshot ($SOURCE missing)" >&2
+    log "${KIND}: nothing to snapshot (${SOURCE} missing); cron noop"
     exit 0
 fi
 
@@ -57,10 +63,12 @@ case "${KIND}" in
     daily)   PREFIX="daily";   STAMP="$(date +%Y-%m-%d)";;
     weekly)  PREFIX="weekly";  STAMP="$(date +%Y-W%V)";;
     manual)  PREFIX="manual";  STAMP="$(date +%Y-%m-%d-%H%M%S)";;
-    *)       echo "unknown kind: ${KIND} (expected: daily, weekly, manual, factory)" >&2; exit 2;;
+    *)       log "unknown kind: ${KIND} (expected: daily, weekly, manual, factory)"; exit 2;;
 esac
 
 DEST="${SNAP_DIR}/${PREFIX}-${STAMP}.dsk"
+
+log "${KIND}: snapshotting ${SOURCE} -> ${DEST}"
 
 # Use cp --reflink=auto if the filesystem supports it (instant, COW),
 # otherwise fall back to a regular copy.
@@ -69,24 +77,41 @@ mv "${DEST}.tmp" "${DEST}"
 chown "{{ chimebox_user }}:{{ chimebox_user }}" "${DEST}"
 chmod 0640 "${DEST}"
 
-echo "chimebox-snapshot: wrote ${DEST}"
+log "${KIND}: wrote ${DEST} ($(stat -c %s "${DEST}") bytes)"
 
 # Trim old snapshots
 case "${KIND}" in
     daily)
-        ls -1t "${SNAP_DIR}"/daily-*.dsk 2>/dev/null \
-            | tail -n +$((KEEP_DAILY + 1)) \
-            | xargs -r rm -f
+        # ls -1t lists newest first; tail -n +N skips the first N-1
+        # lines, leaving everything older than the retention count.
+        OLD=$(ls -1t "${SNAP_DIR}"/daily-*.dsk 2>/dev/null \
+            | tail -n +$((KEEP_DAILY + 1)) || true)
+        if [ -n "${OLD}" ]; then
+            COUNT=$(echo "${OLD}" | wc -l)
+            log "daily: retention prunes ${COUNT} old snapshot(s) (keep=${KEEP_DAILY})"
+            echo "${OLD}" | while read -r f; do
+                log "  prune ${f}"
+                rm -f "${f}"
+            done
+        fi
         ;;
     weekly)
-        ls -1t "${SNAP_DIR}"/weekly-*.dsk 2>/dev/null \
-            | tail -n +$((KEEP_WEEKLY + 1)) \
-            | xargs -r rm -f
+        OLD=$(ls -1t "${SNAP_DIR}"/weekly-*.dsk 2>/dev/null \
+            | tail -n +$((KEEP_WEEKLY + 1)) || true)
+        if [ -n "${OLD}" ]; then
+            COUNT=$(echo "${OLD}" | wc -l)
+            log "weekly: retention prunes ${COUNT} old snapshot(s) (keep=${KEEP_WEEKLY})"
+            echo "${OLD}" | while read -r f; do
+                log "  prune ${f}"
+                rm -f "${f}"
+            done
+        fi
         ;;
 esac
 
 # If today is the configured weekly day, also take a weekly snapshot.
 # Default: Sunday (date +%u == 7). Make this configurable later if needed.
 if [ "${KIND}" = "daily" ] && [ "$(date +%u)" = "7" ]; then
+    log "daily: today is Sunday; chaining a weekly snapshot"
     "$0" weekly
 fi

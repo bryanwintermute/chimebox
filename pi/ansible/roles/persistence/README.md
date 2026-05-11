@@ -54,3 +54,33 @@ way you want it long-term) so a "factory reset" is a meaningful
 | `chimebox-reset latest` | Restore from most recent rotating snapshot |
 | `chimebox-reset factory` | Restore from factory baseline |
 | `chimebox-reset <filename>` | Restore from named rotating snapshot |
+
+## Audit trail
+
+Both helpers log every fire to syslog with a stable tag, so cron-
+driven snapshots and out-of-band restores are visible in the
+journal. The cron `(root) CMD (...)` wrapper line by itself
+only says cron *invoked* the script -- it doesn't capture the
+script's actual outcome (which file was written, retention
+pruning, errors, etc.). The `logger -t` lines below give that
+forensic data:
+
+```bash
+# Did the daily snapshot fire correctly last night?
+journalctl -t chimebox-snapshot --since '24 hours ago'
+
+# Recent restores (kid-reset, factory-reset, ad-hoc)
+journalctl -t chimebox-reset --since '7 days ago'
+
+# Both helpers in one pass
+journalctl -t chimebox-snapshot -t chimebox-reset --since today
+```
+
+Sample output:
+
+```
+May 11 03:17:01 chimebox-snapshot: daily: snapshotting /home/.../System.dsk -> .../daily-2026-05-11.dsk
+May 11 03:17:01 chimebox-snapshot: daily: wrote .../daily-2026-05-11.dsk (104857600 bytes)
+May 11 03:17:01 chimebox-snapshot: daily: retention prunes 1 old snapshot(s) (keep=7)
+May 11 03:17:01 chimebox-snapshot:   prune .../daily-2026-05-04.dsk
+```
