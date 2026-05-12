@@ -1,0 +1,10 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart chimebox-egress
+  ansible.builtin.systemd:
+    name: chimebox-egress.service
+    state: restarted
+    daemon_reload: true

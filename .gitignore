@@ -40,6 +40,9 @@ secrets/
 roles/*/files/local-*
 pi/ansible/inventory.ini
 pi/ansible/.vault_pass
+# Per-host local overrides (e.g., your actual LAN CIDR). Live alongside
+# the committed host_vars/<host>/main.yml but stay out of git.
+pi/ansible/host_vars/*/local.yml
 
 # Workstation-side ops scripts user-local config
 scripts/config.sh

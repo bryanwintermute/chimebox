@@ -44,6 +44,9 @@
       tags: [persistence, snapshots]
     - role: lockdown
       tags: [lockdown, security]
+    - role: egress-firewall
+      tags: [egress-firewall, firewall, security]
+      when: chimebox_egress_firewall_enabled | default(true) | bool
     - role: argon-one-v3
       tags: [argon-one-v3, argon, hardware]
       when: chimebox_argon_one_v3 | bool

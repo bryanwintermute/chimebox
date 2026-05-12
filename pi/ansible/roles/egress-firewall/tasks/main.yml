@@ -1,0 +1,45 @@
+---
+# roles/egress-firewall/tasks/main.yml
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name:
+      - nftables
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure /etc/nftables.d exists
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Install chimebox-egress ruleset
+  ansible.builtin.template:
+    src: chimebox-egress.nft.j2
+    dest: /etc/nftables.d/chimebox-egress.nft
+    mode: "0640"
+    owner: root
+    group: root
+  notify: Restart chimebox-egress
+
+- name: Install chimebox-egress systemd unit
+  ansible.builtin.copy:
+    src: chimebox-egress.service
+    dest: /etc/systemd/system/chimebox-egress.service
+    mode: "0644"
+    owner: root
+    group: root
+  notify:
+    - Reload systemd
+    - Restart chimebox-egress
+
+- name: Enable and start chimebox-egress
+  ansible.builtin.systemd:
+    name: chimebox-egress.service
+    enabled: "{{ chimebox_egress_firewall_enabled | bool }}"
+    state: "{{ 'started' if chimebox_egress_firewall_enabled | bool else 'stopped' }}"
+    daemon_reload: true

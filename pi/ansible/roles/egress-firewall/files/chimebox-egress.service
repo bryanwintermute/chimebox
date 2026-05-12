@@ -1,0 +1,21 @@
+[Unit]
+Description=chimebox kiosk-user egress firewall (nftables)
+Documentation=man:nft(8)
+# Load before the network is fully up so the rules are in place
+# before any user process can speak.
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target sysinit.target shutdown.target
+Wants=network-pre.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/chimebox-egress.nft
+# On stop, delete only OUR table -- don't touch any other
+# nftables rules the host may have.
+ExecStop=/usr/sbin/nft delete table inet chimebox_egress
+
+[Install]
+WantedBy=multi-user.target

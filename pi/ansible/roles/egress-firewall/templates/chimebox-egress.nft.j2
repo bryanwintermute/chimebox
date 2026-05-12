@@ -1,0 +1,52 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+#
+# Restricts the {{ chimebox_egress_restricted_user }} user's outbound
+# traffic to {{ chimebox_lan_cidrs | join(', ') }}.
+# All other users and host services are unaffected: the output
+# chain's default policy is accept, and only packets whose
+# originating socket is owned by the restricted user are jumped
+# to the drop-by-default chain below.
+#
+# Lifecycle:
+#   - chimebox-egress.service ExecStart=nft -f <this file>
+#   - chimebox-egress.service ExecStop =nft delete table inet chimebox_egress
+#   So a 'systemctl restart chimebox-egress' atomically reloads.
+#   Do NOT re-run `nft -f <this file>` manually after it's already
+#   loaded; use systemctl. (Re-running would error on the table
+#   declaration because the table already exists.)
+
+table inet chimebox_egress {
+    # Allowed IPv4 destination CIDRs for the restricted user.
+    # 'flags interval' lets us put CIDRs (ranges) in the set.
+    set allowed_cidrs_v4 {
+        type ipv4_addr
+        flags interval
+        elements = { {{ chimebox_lan_cidrs | join(", ") }} }
+    }
+
+    chain restrict_user {
+        # Loopback always OK (X11 over unix-socket fallbacks, IPC).
+        oif "lo" accept
+
+        # LAN destinations OK.
+        ip daddr @allowed_cidrs_v4 accept
+
+        # Everything else: log (rate-limited) then drop.
+        # We deliberately do NOT allow IPv6 from this user: the
+        # host has no IPv6 default route and Mac OS 8.1 doesn't
+        # speak v6 anyway, so any v6 from the kiosk user is
+        # unexpected and worth dropping.
+{% if chimebox_egress_log_level and chimebox_egress_log_level != "none" %}
+        limit rate {{ chimebox_egress_log_rate }} log prefix "{{ chimebox_egress_log_prefix }}" level {{ chimebox_egress_log_level }}
+{% endif %}
+        counter drop
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+        # meta skuid matches the originating socket's owner UID.
+        # Resolved at rule-load time from username to numeric uid.
+        meta skuid "{{ chimebox_egress_restricted_user }}" jump restrict_user
+    }
+}

@@ -1,0 +1,54 @@
+---
+# roles/egress-firewall/defaults/main.yml
+#
+# Restricts the kiosk user's outbound network traffic to the
+# configured LAN CIDR(s). Operator (admin user) and host
+# services (DHCP, NTP, apt) are unaffected -- they run as
+# different users and the firewall's output chain has
+# policy=accept; only packets from the kiosk user are jumped
+# to the restrictive chain.
+#
+# Design rationale:
+# - The kid-facing kiosk (BasiliskII running as chimebox_user) should
+#   never reach the public internet. If a kid ever escapes the
+#   emulator into the host shell, their UID still can't egress.
+# - Operator SSH and host updates are a separate user/concern
+#   and shouldn't be gated by this rule.
+# - Future v2 bridges (AppleTalk-over-UDP tunnel, modern messaging
+#   bridge, printer bridge) should each run as a dedicated user
+#   with their own scoped allowlist -- not piggyback on
+#   chimebox_user.
+
+# Master switch. Default ON for kid-handoff readiness. Set to false
+# in host_vars for hosts where you want to skip the firewall entirely.
+chimebox_egress_firewall_enabled: true
+
+# The user account whose egress is restricted. Defaults to the
+# kiosk user. Override if you ever rename it.
+chimebox_egress_restricted_user: "{{ chimebox_user }}"
+
+# CIDR(s) the restricted user is allowed to reach. **Override per
+# your home LAN.** The default is the most-common home-router range
+# (192.168.1.0/24); adjust to match the network your chimebox sits on.
+chimebox_lan_cidrs:
+  - "192.168.1.0/24"
+
+# Logging level for dropped packets. One of:
+#   emerg, alert, crit, err, warn, notice, info, debug, "none"
+# "warn" is a reasonable balance: visible via
+#   journalctl -p warn -k --grep chimebox-egress-drop
+# without flooding the journal. Set to "none" to disable logging
+# entirely (silent drop).
+chimebox_egress_log_level: warn
+
+# Rate-limit drop logs to avoid flooding under a misbehaving
+# process or attack. nftables 'limit rate' syntax. Examples:
+#   "10/second"  -- up to 10 dropped-packet log entries per second
+#   "1/second"   -- very quiet
+#   "100/minute" -- bursty but capped per minute
+chimebox_egress_log_rate: "10/second"
+
+# Tag prefix written to the kernel log (kmsg / journal) so you can
+# easily grep for the drops:
+#   journalctl -k --since today | grep chimebox-egress-drop
+chimebox_egress_log_prefix: "chimebox-egress-drop: "
