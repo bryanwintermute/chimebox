@@ -1,0 +1,40 @@
+name: Question / Setup help
+description: Asking for help with installation, configuration, or how something works.
+title: "[question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Welcome! A few things before you ask:
+
+        **Please do not attach** ROM files, disk images, photos of
+        children, or other personal data.
+
+        Check first that your question isn't already answered:
+        - [`pi/SETUP.md`](https://github.com/bryanwintermute/chimebox/blob/main/pi/SETUP.md) for initial install
+        - [`docs/operations.md`](https://github.com/bryanwintermute/chimebox/blob/main/docs/operations.md) for day-2 ops
+        - [`docs/recovery.md`](https://github.com/bryanwintermute/chimebox/blob/main/docs/recovery.md) for "something is broken"
+        - [`docs/era-decisions.md`](https://github.com/bryanwintermute/chimebox/blob/main/docs/era-decisions.md) for "why is it like this"
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you trying to do?
+      description: What's your end goal, in your own words?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you tried already?
+      description: |
+        Knowing where you got stuck helps a lot more than the bare
+        question.
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Pi model + boot media (if relevant)
+      placeholder: "Pi 5 8GB, microSD"

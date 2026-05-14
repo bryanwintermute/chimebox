@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: chimebox documentation
+    url: https://github.com/bryanwintermute/chimebox#documentation
+    about: Most install / how-to / failure questions are answered in docs/

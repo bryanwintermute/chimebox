@@ -1,0 +1,79 @@
+name: Bug report
+description: Something on a working chimebox stopped working as expected.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! A few asks before you submit:
+
+        **Please do not attach** ROM files, disk images (`*.dsk`, `*.img`),
+        photos of children, or other personal data. Privacy-sensitive
+        details (LAN CIDRs, real hostnames) can be redacted before
+        pasting.
+
+        If your chimebox is in a wedged state right now,
+        [`docs/recovery.md`](https://github.com/bryanwintermute/chimebox/blob/main/docs/recovery.md)
+        has symptom-first triage that may resolve it faster than
+        filing an issue.
+
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What did you observe? What did you expect to see instead?
+      placeholder: |
+        e.g. "Kiosk boots fine, Mac chime plays, but the Mac never
+        reaches the Desktop -- it gets stuck on the welcome splash."
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Pi model and boot media
+      placeholder: "Pi 5 8GB, NVMe SSD via Argon V3 case"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Pi OS version
+      description: From `cat /etc/os-release` -> `PRETTY_NAME`
+      placeholder: "Raspberry Pi OS Trixie Lite (64-bit)"
+
+  - type: input
+    id: chimebox-rev
+    attributes:
+      label: chimebox revision
+      description: `git rev-parse --short HEAD` from your local clone
+      placeholder: "abc1234"
+
+  - type: textarea
+    id: relevant-journal
+    attributes:
+      label: Relevant journal output
+      description: |
+        See [recovery.md's tag cheatsheet](https://github.com/bryanwintermute/chimebox/blob/main/docs/recovery.md#where-logs-live)
+        for the journalctl tags worth grepping. Pipe through
+        `journalctl --no-pager` and paste the relevant lines.
+      render: text
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What did you try?
+      description: |
+        Did you walk through recovery.md? Did kid-reset / factory-reset
+        help? Did the panic-button combo fire?
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Is this on the dev kiosk, a kid-handoff chimebox, or a fresh build?
+      options:
+        - Fresh build, first time running the playbook
+        - Existing chimebox; was working, now isn't
+        - Modified setup (forked / custom roles / etc.)
