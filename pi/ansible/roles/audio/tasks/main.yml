@@ -18,6 +18,14 @@
     group: root
   notify: Restart chimebox-audio-init
 
+- name: Install chimebox-audio-list helper
+  ansible.builtin.template:
+    src: chimebox-audio-list.sh.j2
+    dest: /usr/local/sbin/chimebox-audio-list
+    mode: "0755"
+    owner: root
+    group: root
+
 - name: Install chimebox-audio-init systemd unit
   ansible.builtin.template:
     src: chimebox-audio-init.service.j2

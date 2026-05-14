@@ -74,31 +74,76 @@ the kiosk keeps booting, just without a software-set volume.
 
 ## Discovering your hardware
 
-On the Pi after boot:
+After the first playbook run, the role installs a helper that
+inventories your audio hardware and prints **ready-to-paste**
+host_vars:
 
 ```bash
-# Card names (the bracketed identifier in the second column)
-$ cat /proc/asound/cards
- 0 [vc4hdmi0       ]: vc4-hdmi - vc4-hdmi-0
-                      vc4-hdmi-0
- 1 [vc4hdmi1       ]: vc4-hdmi - vc4-hdmi-1
-                      vc4-hdmi-1
- 2 [MyUSBDAC       ]: USB-Audio - My USB Speaker
-                      Generic USB audio device
-
-# Mixer controls per card
-$ amixer -c 0 scontrols    # HDMI 0: often empty
-$ amixer -c 2 scontrols    # USB DAC: typically 'PCM'
+ssh <admin>@<your-chimebox> sudo chimebox-audio-list
 ```
 
-Then set host_vars:
+Sample output:
 
-```yaml
-# host_vars/<host>/main.yml (or local.yml if privacy-sensitive)
-chimebox_audio_card: MyUSBDAC
-chimebox_audio_master_control: PCM
-chimebox_audio_default_volume_percent: 60
 ```
+=== ALSA audio cards on chimebox ===
+
+Card 0: vc4hdmi0
+  Type:        HDMI
+  Description: vc4-hdmi - vc4-hdmi-0
+  Mixer controls: (none -- volume set on the device or downstream)
+
+Card 1: vc4hdmi1
+  Type:        HDMI
+  Description: vc4-hdmi - vc4-hdmi-1
+  Mixer controls: (none -- volume set on the device or downstream)
+
+Card 2: MyUSBDAC
+  Type:        USB Audio
+  Description: USB-Audio - My USB Speaker
+  Mixer controls:
+    Simple mixer control 'PCM',0
+
+=== Current routing ===
+/etc/asound.conf points to:
+    slave.pcm "hw:MyUSBDAC,0"
+    card "MyUSBDAC"
+
+=== Suggested host_vars for this hardware ===
+
+Edit pi/ansible/host_vars/<your-host>/main.yml and set:
+
+  # USB card detected
+  chimebox_audio_card: MyUSBDAC
+  chimebox_audio_master_control: PCM
+  chimebox_audio_default_volume_percent: 60
+
+Then re-run: ansible-playbook playbook.yml --tags audio
+
+Or accept the default 'auto' (prefer USB, fall back to HDMI 0)
+and skip the host_vars step entirely.
+```
+
+### If you haven't run the playbook yet
+
+The helper is installed by the audio role, so for the very
+first run you have three options:
+
+1. **Accept the default.** `chimebox_audio_card: auto` is
+   the role default. Just run the playbook; the audio-init
+   service will pick the first USB audio card if present
+   (otherwise HDMI 0). For most setups this is correct.
+
+2. **Inspect by hand first.** SSH in and run:
+   ```bash
+   cat /proc/asound/cards    # card index + bracketed name
+   aplay -l                   # same info, formatted
+   amixer -c <N> scontrols    # mixer controls on card N
+   ```
+
+3. **Run the playbook with auto, then re-tune.** Run once with
+   the default, SSH in, run `sudo chimebox-audio-list`, set
+   host_vars, re-run with `--tags audio`. (This is the usual
+   flow.)
 
 ## Verifying
 

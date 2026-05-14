@@ -1,0 +1,158 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-audio-list
+#
+# Inventory ALSA audio cards on this chimebox and suggest host_vars
+# settings. Run after first provisioning (or any time you change
+# audio hardware) to figure out what to set in host_vars.
+#
+# Usage:
+#   sudo chimebox-audio-list
+
+set -u
+
+if [ ! -r /proc/asound/cards ]; then
+    echo "No /proc/asound/cards on this host. Is the kernel sound subsystem loaded?"
+    exit 1
+fi
+
+echo "=== ALSA audio cards on $(hostname) ==="
+echo
+
+# Parse cards from /proc/asound/cards. Format:
+#   0 [vc4hdmi0       ]: vc4-hdmi - vc4-hdmi-0
+#                        vc4-hdmi-0
+declare -A IDX_NAME IDX_LONG IDX_MODULE
+while IFS= read -r line; do
+    if [[ "$line" =~ ^[[:space:]]*([0-9]+)[[:space:]]+\[([^]]+)\][[:space:]]*:[[:space:]]*(.*) ]]; then
+        idx="${BASH_REMATCH[1]}"
+        name="${BASH_REMATCH[2]// /}"
+        long="${BASH_REMATCH[3]}"
+        IDX_NAME[$idx]="$name"
+        IDX_LONG[$idx]="$long"
+    fi
+done < /proc/asound/cards
+
+# Module per card index (from /proc/asound/modules):
+#   0 vc4
+#   2 snd_usb_audio
+if [ -r /proc/asound/modules ]; then
+    while read -r idx mod _rest; do
+        [ -n "${idx:-}" ] && IDX_MODULE[$idx]="$mod"
+    done < /proc/asound/modules
+fi
+
+is_usb_audio() {
+    [[ "${IDX_MODULE[$1]:-}" == "snd_usb_audio" ]]
+}
+
+is_hdmi() {
+    [[ "${IDX_MODULE[$1]:-}" =~ vc4 ]] || [[ "${IDX_NAME[$1]:-}" =~ hdmi ]]
+}
+
+card_kind() {
+    if is_usb_audio "$1"; then echo "USB Audio"
+    elif is_hdmi "$1"; then echo "HDMI"
+    else echo "Other"
+    fi
+}
+
+# Per-card report and suggestion calculation
+suggested_card=""
+suggested_control=""
+suggested_kind=""
+
+for idx in $(printf '%s\n' "${!IDX_NAME[@]}" | sort -n); do
+    name="${IDX_NAME[$idx]}"
+    kind="$(card_kind "$idx")"
+    long="${IDX_LONG[$idx]}"
+
+    echo "Card $idx: ${name}"
+    echo "  Type:        ${kind}"
+    echo "  Description: ${long}"
+
+    controls="$(amixer -c "$idx" scontrols 2>/dev/null || true)"
+    if [ -n "$controls" ]; then
+        echo "  Mixer controls:"
+        echo "$controls" | sed 's/^/    /'
+    else
+        echo "  Mixer controls: (none -- volume set on the device or downstream)"
+    fi
+    echo
+
+    # Pick suggested card: prefer first USB, else card 0
+    if [ -z "$suggested_card" ] && is_usb_audio "$idx"; then
+        suggested_card="$name"
+        suggested_kind="USB"
+        # Pick a sensible control: prefer PCM, then Master, then any
+        if echo "$controls" | grep -q "'PCM'"; then
+            suggested_control="PCM"
+        elif echo "$controls" | grep -q "'Master'"; then
+            suggested_control="Master"
+        elif [ -n "$controls" ]; then
+            suggested_control="$(echo "$controls" | head -1 | sed -n "s/.*'\([^']*\)'.*/\1/p")"
+        else
+            suggested_control=""
+        fi
+    fi
+done
+
+# If no USB, fall back to card 0
+if [ -z "$suggested_card" ] && [ -n "${IDX_NAME[0]:-}" ]; then
+    suggested_card="${IDX_NAME[0]}"
+    suggested_kind="HDMI/onboard"
+    controls0="$(amixer -c 0 scontrols 2>/dev/null || true)"
+    if echo "$controls0" | grep -q "'PCM'"; then
+        suggested_control="PCM"
+    elif echo "$controls0" | grep -q "'Master'"; then
+        suggested_control="Master"
+    else
+        suggested_control=""
+    fi
+fi
+
+# Current state
+echo "=== Current routing ==="
+if [ -f /etc/asound.conf ]; then
+    echo "/etc/asound.conf points to:"
+    grep -E 'card |slave.pcm' /etc/asound.conf | sed 's/^/  /'
+else
+    echo "(no /etc/asound.conf; ALSA uses its built-in default, typically card 0)"
+fi
+echo
+
+# Show what the audio-init service has been doing recently
+if command -v journalctl >/dev/null 2>&1; then
+    last="$(journalctl -t chimebox-audio-init -n 5 --no-pager 2>/dev/null | tail -5)"
+    if [ -n "$last" ]; then
+        echo "Recent chimebox-audio-init activity:"
+        echo "$last" | sed 's/^/  /'
+        echo
+    fi
+fi
+
+# Suggestion
+if [ -z "$suggested_card" ]; then
+    echo "No cards detected; nothing to suggest."
+    exit 0
+fi
+
+echo "=== Suggested host_vars for this hardware ==="
+echo
+echo "Edit pi/ansible/host_vars/<your-host>/main.yml (or"
+echo "host_vars/<your-host>/local.yml for privacy-sensitive identifiers)"
+echo "and set:"
+echo
+echo "  # ${suggested_kind} card detected"
+echo "  chimebox_audio_card: ${suggested_card}"
+if [ -n "$suggested_control" ]; then
+    echo "  chimebox_audio_master_control: ${suggested_control}"
+else
+    echo "  chimebox_audio_master_control: \"\"  # no software mixer; volume via TV/monitor hardware"
+fi
+echo "  chimebox_audio_default_volume_percent: 60"
+echo
+echo "Then re-run: ansible-playbook playbook.yml --tags audio"
+echo
+echo "Or accept the default 'auto' (prefer USB, fall back to HDMI 0)"
+echo "and skip the host_vars step entirely."
