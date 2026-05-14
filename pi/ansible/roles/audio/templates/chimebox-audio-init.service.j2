@@ -1,0 +1,19 @@
+[Unit]
+Description=chimebox audio init (ALSA default sink + boot volume)
+Documentation=man:alsactl(1) man:amixer(1)
+# Run after the ALSA kernel modules are loaded and the userspace
+# sound services are up, but BEFORE the kiosk's autologin/X chain
+# starts -- so BasiliskII opens the correct default sink at first
+# launch and isn't holding the wrong one.
+After=sound.target alsa-state.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/chimebox-audio-init
+# StandardOutput/Error already go to journal via logger -t in the
+# script; nothing else needed here.
+
+[Install]
+WantedBy=multi-user.target

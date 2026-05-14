@@ -1,0 +1,10 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart chimebox-audio-init
+  ansible.builtin.systemd:
+    name: chimebox-audio-init.service
+    state: restarted
+    daemon_reload: true

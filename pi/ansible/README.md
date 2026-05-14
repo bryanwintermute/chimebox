@@ -43,6 +43,7 @@ The playbook orchestrates these roles in order:
 | `chimebox` | Install runtime files: start.sh (supervisor loop), .xinitrc, BasiliskII prefs, systemd unit |
 | `persistence` | Install snapshot cron, reset/service-mode helpers |
 | `lockdown` | Disable screen blanking, host cursor, USB autoboot, etc. |
+| `audio` | (default-on) ALSA default sink + boot-time volume; per-host card selection |
 | `egress-firewall` | (default-on) Per-user nftables: blocks kiosk user from reaching off-LAN destinations |
 | `argon-one-v3` | (opt-in) Install Argon One V3 case fan daemon + EEPROM tweaks |
 | `boot-splash` | (opt-in) Plymouth splash replacing Linux boot text |

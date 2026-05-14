@@ -1,0 +1,49 @@
+---
+# roles/audio/defaults/main.yml
+#
+# Configures ALSA default sink + boot-time volume.
+#
+# This role exists because the Pi 5's bare-ALSA setup defaults to
+# HDMI port 0, which may or may not be where the operator actually
+# wants audio to go for the kiosk. Two distinct kid setups are
+# common:
+#   - Pi 5 + small powered USB speaker (cute, one-cable-power)
+#   - Pi 5 + HDMI monitor/TV with built-in speakers
+#
+# We can't pick a sensible host-wide default, so the variables here
+# are host_vars-driven. `auto` is provided as a best-effort fallback
+# (prefer USB if any USB audio card is present at boot; otherwise
+# fall back to HDMI 0).
+
+# Master switch.
+chimebox_audio_enabled: true
+
+# Which ALSA card to use as the default sink. One of:
+#   "auto"           -- prefer first USB audio card; fall back to HDMI 0
+#   "<card-name>"    -- the bracketed name from /proc/asound/cards, e.g.
+#                       "MyUSBDAC", "vc4hdmi0", "vc4hdmi1"
+#   "<card-index>"   -- numeric ALSA index (less stable across USB
+#                       hot-plug than the name; prefer the name)
+#
+# Discoverable via `aplay -l` and `/proc/asound/cards` on the Pi.
+# See roles/audio/README.md for guidance.
+chimebox_audio_card: auto
+
+# Mixer control name on the chosen card used for boot-time volume.
+# Common values:
+#   "PCM"     -- typical for USB DACs and external audio interfaces
+#   "Master"  -- many sound chips
+#   "Speaker" -- some laptops
+#   ""        -- the card has no software mixer (e.g. Pi 5 HDMI);
+#                volume setting is skipped silently and the operator
+#                must set volume via the monitor/TV's hardware
+#                controls.
+#
+# If you set this wrong, the boot script logs a clear warning to
+# journalctl -t chimebox-audio-init and continues without erroring.
+chimebox_audio_master_control: PCM
+
+# Default master volume, 0-100 percent. 60% is a "safe but audible"
+# starting point for the Mac OS 8.1 startup chime, which can be
+# surprisingly loud at 100%.
+chimebox_audio_default_volume_percent: 60
