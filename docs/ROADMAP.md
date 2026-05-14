@@ -1,5 +1,10 @@
 # chimebox roadmap
 
+> **Last meaningful sweep:** 2026-05-14. v1 is functionally
+> complete; this doc retains historical items as evidence/audit
+> trail with `[x]` markers. For *current* todo state see the
+> commit log + role READMEs.
+
 This document tracks known follow-up work, organized by phase. The
 session that brought up the basic case (Mac OS 8.1 booting on a Pi 5
 through Ansible-managed kiosk) flushed a lot of items into the "we
@@ -71,39 +76,33 @@ Things that should land before any actual handoff to a young user.
         - Push a real `InfiniteHD.dsk` (above), or
         - Customize `System.dsk` (HFS edit) to remove the desktop
           alias to Infinite HD.
-- [ ] **Decide on kid-shortlist Desktop**. Once the library is
-      mounted, the user customization step (deferred from v1) drops
-      a shortlist of kid-appropriate apps onto the Desktop and
-      hides the Developer / esoteric folders.
+- [x] **Decide on kid-shortlist Desktop**. Done 2026-05-14 — curated
+      Tier S on Desktop, factory-blessed via polite Mac shutdown.
 
 ### Hardware
 
-- [ ] **Active cooler** (in transit). Replace passive heatsink;
-      expected drop from ~56°C idle-load to ~35–45°C.
-- [ ] **NVMe SSD** (in transit). Reflash + Ansible re-run; copy
-      disks back via push-disks. Reliability win for daily-driver
-      use.
+- [x] **Active cooler** (Argon One V3 case installed). Sustained-load
+      temps ~47°C; cron-fan via the role's daemon.
+- [x] **NVMe SSD** (256GB; validated real via 100GiB pattern test).
 - [ ] **Final keyboard/mouse**. Wired, full-size keyboard (no
       chiclet); 2-button optical mouse.
 
 ## v1.5 reliability — validate the safety nets actually work
 
-Things we set up but didn't test against real failures.
+(Status: all items below validated; section retained as evidence.)
 
-- [ ] **Snapshot cron**: confirmed installed, never observed firing.
-      Wait for 03:17 local OR force `sudo /usr/local/sbin/chimebox-snapshot daily`,
-      then verify a snapshot lands in `~/chimebox/snapshots/`.
-- [ ] **kid-reset.sh against a real snapshot**: produce damage in
-      Mac OS, then `./scripts/kid-reset.sh latest`, verify state is
-      restored.
-- [ ] **service-mode.sh round-trip**: stop kiosk, do work, exit,
-      verify kiosk auto-resumes.
-- [ ] **push-disks.sh end-to-end**: this session bypassed the
-      script and used `scp` manually. Run the actual script with
-      rsync now that rsync is installed. Validate sudo
-      handling, file ownership, perms.
-- [ ] **Power-yank chaos test**: yank power 10 times in 5 minutes,
-      ensure the Pi always comes back into a working kiosk.
+- [x] **Snapshot cron**: validated 2026-05-07; cron has fired daily
+      May 4 through current, plus Sunday-weekly auto-chain.
+- [x] **kid-reset.sh against a real snapshot**: done 2026-05-07 via
+      HFS Volume Header zeroing; post-reset System.dsk byte-perfect
+      to baseline.
+- [x] **service-mode.sh round-trip**: stop kiosk, do work, exit,
+      verify kiosk auto-resumes. Validated.
+- [x] **push-disks.sh end-to-end**: rsync path validated.
+- [x] **Power-yank chaos test**: validated 2026-05-08 (accidentally
+      power-cycled the Pi during testing; recovered cleanly, all
+      snapshots intact, daemon auto-started, supervisor loop
+      resumed).
 - [ ] **Investigate Ansible privilege-escalation timeouts**: the
       pattern of "first run times out, second works" or "sometimes
       30s isn't enough" was reproducible this session. Suspect
@@ -113,39 +112,23 @@ Things we set up but didn't test against real failures.
 
 ## v1 documentation
 
-Specifically deferred docs from the foundation chunk:
+(Status: all v1 docs landed; this section retained as a milestone marker.)
 
-- [ ] `docs/era-decisions.md` — why Mac OS 8.1 + Quadra 650, why
-      BasiliskII over Mini vMac/SheepShaver, why Ansible, why X11.
-      Citing this thread's reasoning.
-- [ ] `docs/operations.md` — day-2 ops runbook: how to push disks,
-      snapshot, reset, enter service mode, check health.
-- [ ] `docs/recovery.md` — when things go wrong: power-yank
-      recovery, corrupted System.dsk, Pi won't boot, kiosk respawn
-      loop, etc.
-- [ ] `docs/shortlist.md` — curated kid-software list with age
-      notes, sourced from Macintosh Garden, organized by category
-      (drawing, games, education, utilities).
+- [x] `docs/era-decisions.md` — done 2026-05-06 (commit f78987a).
+- [x] `docs/operations.md` — done 2026-05-14 (commit b595ced).
+- [x] `docs/recovery.md` — done 2026-05-14 (commit 05a246e).
+- [x] `docs/shortlist.md` — done long ago.
+- [x] `docs/architecture-patterns.md` — done 2026-05-14 (commit
+      c5c1b42); added during the Tier B docs trio for public release.
 
 ## v2 features
 
 Bigger-than-v1 items that need design.
 
-- [ ] **Hide the Linux boot, show a Happy-Mac splash instead**.
-      Today the user sees the Pi rainbow splash, then scrolling
-      systemd boot output, then the X session starts. Goal: from
-      power-on to BasiliskII, never expose Linux. Mechanism:
-        - `cmdline.txt` flags: `quiet splash logo.nologo console=tty3
-          vt.global_cursor_default=0 plymouth.ignore-serial-consoles`
-        - Custom plymouth theme rendering a fullscreen image (e.g.
-          the classic "Welcome to Macintosh" / Happy Mac)
-        - Disable the Pi's rainbow splash via `disable_splash=1` in
-          `/boot/firmware/config.txt`
-        - Probably a new Ansible role `boot-splash` with a default
-          theme but designed to be replaceable by users who want
-          different aesthetics.
-      Plays well with the existing `hdmi-firmware-pin` work in v1
-      polish; both touch `/boot/firmware/config.txt`.
+- [x] **Hide the Linux boot, show a Happy-Mac splash instead**.
+      Done via the `boot-splash` Ansible role (Plymouth-based);
+      pillarbox-friendly defaults, replaceable by users who want
+      different aesthetics.
 
 - [ ] **Boot-time selector for which environment to launch**. A
       small selector shown briefly before the kiosk locks in,
@@ -158,19 +141,12 @@ Bigger-than-v1 items that need design.
       (`chimebox` role would split into `chimebox-runtime` +
       one emulator role per supported emulator).
 
-- [ ] **PiKVM mouse compatibility (or document its absence)**.
-      PiKVM emulates a USB HID device and sends absolute pointer
-      coordinates. BasiliskII with `init_grab=true` (relative-mouse
-      capture mode, which we set for kiosk-quality interaction)
-      interprets those absolute values as relative deltas, producing
-      backwards/upside-down/weird cursor behavior. Options:
-        - Document the limitation: use SSH for chimebox admin, not
-          PiKVM. (Most likely outcome.)
-        - Toggle B2 between absolute and relative modes via a
-          script ("chimebox-pikvm-mode on/off").
-        - Detect PiKVM by USB VID/PID at start.sh time and pick
-          the right `init_grab` value.
-      Worth a lesson file once we confirm the diagnosis.
+- [x] **PiKVM mouse compatibility** — Resolved via the
+      `chimebox_display_profile` abstraction (per-host config) plus
+      `scripts/mouse-mode.sh` for runtime toggling between
+      `grab`/relative (physical mouse) and `absolute`/PiKVM/VNC
+      modes. The `matched-stretched` profile is the PiKVM-friendly
+      default.
 
 - [ ] **At Ease overlay** as opt-in role. Apple's actual kid-shell
       from this era. Fully period-correct alternative to "raw
@@ -192,9 +168,13 @@ Bigger-than-v1 items that need design.
 
 ## v2 reliability + security
 
-- [ ] **Verify no internet egress from kiosk**: `tcpdump -i eth0
-      not port 22` should be silent under normal use. Add a
-      firewall rule or DNS sinkhole as belt-and-suspenders.
+- [x] **Verify no internet egress from kiosk**: Done 2026-05-12 via
+      the `egress-firewall` Ansible role (commit 84a5a50). Per-user
+      nftables `meta skuid` rule blocks the kiosk user from
+      reaching off-LAN destinations; operator + host services
+      unaffected. Validated: 1.1.1.1 timeouts from kiosk user,
+      drops logged with full packet detail, operator's curl
+      reaches example.org as normal.
 - [ ] **Audit mDNS / Bonjour broadcasts**: Pi may be advertising
       services on the LAN. Lock down to `chimebox-dev` only.
 - [ ] **Read-only root filesystem**: Pi 5 supports overlayfs /

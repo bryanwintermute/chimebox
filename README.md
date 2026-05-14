@@ -5,14 +5,18 @@
 
 ## Status
 
-**v1 in active development.** On one dev Pi 5 kiosk, chimebox boots
-directly into Mac OS 8.1, respawns the emulator after guest shutdown,
-auto-mounts USB sticks as Mac volumes, and has bedtime / panic-button /
-snapshot machinery installed and exercised in regular use.
+**v1 complete; first real kid-handoff imminent.** On the dev Pi 5
+kiosk, chimebox boots directly into Mac OS 8.1 with a curated
+kid-shortlist Desktop, respawns the emulator after guest
+shutdown, auto-mounts USB sticks as Mac volumes, routes audio
+to a per-host configured device at a sensible default volume,
+blocks the kiosk user from reaching the public internet, and
+has bedtime / panic-button / snapshot / factory-bless machinery
+all installed and exercised through real-world use.
 
-Not yet validated through real handoff to a child user, and not yet
-polished for one-shot adoption by strangers. See [Status & rough
-edges](#status--rough-edges) below for an honest read on what to expect.
+See [Status & rough edges](#status--rough-edges) below for an
+honest read on what's tested vs not, and the known limitations
+documented in role READMEs.
 
 ## What is chimebox?
 
@@ -104,16 +108,28 @@ What makes chimebox distinct from "just run an emulator on a Pi":
 - **Below-X evdev panic button** — Ctrl+Alt+Shift+R force-resets the
   emulator from a small daemon that reads `/dev/input/event*` directly.
   Works even when the guest app aggressively grabs input. Audit log
-  for every fire.
-- **Snapshot + reset** — nightly cron-driven snapshots of the user
-  disk with rolling retention. `scripts/kid-reset.sh` restores from a
-  chosen snapshot when something gets broken.
+  for every fire. Optional opt-in combos for kid-reset (rollback)
+  and emergency-stop.
+- **Snapshot + factory baseline** — nightly cron-driven rotating
+  snapshots of the user disk, plus a separate operator-blessed
+  factory baseline captured via clean Mac OS shutdown.
+  `scripts/kid-reset.sh` restores from a chosen rotating snapshot;
+  `scripts/factory-reset.sh` rolls back to the curated baseline.
 - **"Outside World" host folder** — a host directory appears on the
   guest desktop as a network volume; USB sticks auto-mount as
   sub-folders on insertion, so adults can move files in/out without
   giving the guest internet.
-- **Guest networking disabled by default** — so offline is the
-  default, not a policy you have to remember.
+- **Audio routing + safe default volume** — per-host ALSA card
+  selection (USB DAC, HDMI, etc.) by stable card name (not index, so
+  USB hot-plug doesn't shift routing); boot-time volume cap so the
+  Mac chime at 100% never surprises anyone. Ships a discovery helper
+  (`sudo chimebox-audio-list`) that prints copy-paste-ready host_vars
+  for whatever audio hardware the operator actually has.
+- **Per-user egress firewall** — guest networking is disabled in
+  Basilisk II as the primary defense; an nftables `meta skuid` rule
+  is the belt-and-suspenders second layer, blocking the kiosk user
+  from reaching off-LAN destinations even if anything were to escape
+  the emulator. Operator SSH, host updates, NTP, etc. are unaffected.
 
 ## Why?
 
@@ -140,20 +156,35 @@ see [`docs/era-decisions.md`](./docs/era-decisions.md).
 
 **Implemented and working on the dev kiosk:**
 
-- Automatic boot directly into Mac OS 8.1.
+- Automatic boot directly into Mac OS 8.1 with a curated kid-shortlist
+  Desktop (factory-blessed via clean Mac OS shutdown).
 - Emulator respawn after guest shutdown.
-- Below-X panic-button reset (validated under Mac OS error trap loops).
+- Below-X panic-button reset (validated under Mac OS error trap loops,
+  plus opt-in kid-reset combo with 1.5s hold-time gate).
 - USB Outside World mounting (validated end-to-end).
 - Bedtime / wake-up script flow (validated through several real
   bedtime cycles).
-- Snapshot machinery installed and running on cron.
+- Snapshot machinery running on cron; rotating-snapshot rollback
+  exercised against deliberate HFS-level damage.
+- Factory bless + factory reset round-trip exercised; captured
+  baseline has the HFS clean-unmount flag set.
+- Audio routing + 60% boot-volume default via per-host ALSA card
+  selection.
+- Per-user egress firewall (nftables `meta skuid` against the kiosk
+  user) verified blocking off-LAN destinations while operator
+  remains fully unrestricted.
+- Power-yank survival: the Pi recovers cleanly from sudden power-cycle
+  (validated accidentally during testing — see
+  [`docs/recovery.md`](./docs/recovery.md)).
 
-**Still being validated before real handoff:**
+**Still ahead before broader adoption:**
 
-- Snapshot / reset round-trip under deliberate damage.
-- Power-yank chaos test.
-- The final curated kid-shortlist on the Desktop.
-- Belt-and-suspenders no-egress firewall verification.
+- First handoff to the real intended user.
+- Documentation iteration after a non-author tries to set one up.
+- Optional polish items: USB safe-eject hotkey, custom "Outside
+  World" volume name + icon (requires BasiliskII source patch),
+  fresh-install workflow refactor. All filed in the project's
+  internal tracker; none are kid-handoff blockers.
 
 **Known limitations (documented in role READMEs):**
 
@@ -162,8 +193,11 @@ see [`docs/era-decisions.md`](./docs/era-decisions.md).
   save to Macintosh HD first, then drag into Outside World.
 - Cross-mount drag-within-Unix-volume returns EXDEV → Mac shows "disk
   error". Workaround: hold Option to force copy semantics.
+- The Outside World extfs volume's name is hardcoded by BasiliskII to
+  "Unix" and is not currently overridable from chimebox without
+  patching BasiliskII source.
 - Disk-prep on Linux is not yet supported; macOS is required for
-  building images.
+  building images. Linux disk-prep is on the roadmap.
 - `chimebox.service` (systemd) is installed but disabled in v1; the
   active supervisor is the autologin → startx → start.sh chain.
 
@@ -200,6 +234,15 @@ Different docs serve different audiences:
 - [`scripts/README.md`](./scripts/README.md) — Day-2 operational
   scripts.
 
+**If you want to run one (day-2 ops and recovery):**
+
+- [`docs/operations.md`](./docs/operations.md) — Day-2 runbook:
+  bedtime/wake-up rhythm, snapshot management, system updates,
+  inspection commands, "I want to..." workflows.
+- [`docs/recovery.md`](./docs/recovery.md) — Symptom-first triage
+  for failure modes (Mac wedged, black screen, kiosk crash-loop,
+  audio dead, USB won't appear, SSH does not work, etc.).
+
 **If you want the design rationale:**
 
 - [`docs/era-decisions.md`](./docs/era-decisions.md) — *Why* of every
@@ -207,6 +250,10 @@ Different docs serve different audiences:
   posture, kid-experience principles, exception policy).
 - [`docs/architecture.md`](./docs/architecture.md) — *How* the live
   system fits together.
+- [`docs/architecture-patterns.md`](./docs/architecture-patterns.md) —
+  Reusable design patterns abstracted from the Mac-specific
+  implementation; the "if I were forking this for a different
+  emulator stack" reference.
 - [`docs/shortlist.md`](./docs/shortlist.md) — Tier-ranked guide to the
   Mac OS software library.
 - [`docs/ROADMAP.md`](./docs/ROADMAP.md) — What's next; current state
