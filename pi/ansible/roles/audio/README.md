@@ -12,6 +12,15 @@ time volume for the kiosk. Solves two distinct kid-handoff problems:
    real USB speaker is shockingly loud. This role sets a safe
    default (60% out of the box; configurable) at every boot.
 
+> **Pi 5 has no 3.5mm jack.** The Pi 5 board dropped the
+> 3.5mm combo audio/composite jack present on earlier models.
+> Stock audio options are HDMI (either port) or USB. If you
+> want analog audio out, add a USB DAC, an I2S DAC HAT, or a
+> case-specific audio add-on (e.g., Argon ONE V3's audio
+> board). The `chimebox-audio-list` helper categorizes USB
+> audio devices as "USB Audio" and I2S/codec cards as "Other";
+> the `auto` mode picks the first USB card if any, else HDMI 0.
+
 ## What it does
 
 Installs:
