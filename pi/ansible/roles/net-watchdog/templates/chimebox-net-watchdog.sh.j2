@@ -1,0 +1,157 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-net-watchdog
+#
+# Connectivity check + auto-recovery. Run periodically by
+# chimebox-net-watchdog.timer.
+#
+# Strategy:
+#   1. Ping the default gateway (or a configured target).
+#   2. On success, clear the failure counter.
+#   3. On failure, increment a state-file counter in /run.
+#   4. When the counter reaches MAX, run the recovery escalation
+#      ladder (nmcli connection up, then systemctl restart
+#      NetworkManager).
+#   5. Never reboot. Reboot decisions are the operator's.
+#
+# Logs all forensic data via `logger -t chimebox-net-watchdog`
+# because cron/timer stdout is invisible without it.
+#
+# State file lives in /run so it resets on every boot (intentional:
+# we want a fresh start; we don't want a stale "almost at
+# threshold" counter triggering recovery from the first post-boot
+# check).
+
+set -u
+
+LOG_TAG="chimebox-net-watchdog"
+STATE_FILE="/run/chimebox-net-watchdog.state"
+MAX_FAILURES="{{ chimebox_net_watchdog_max_consecutive_failures }}"
+
+CONFIGURED_TARGET="{{ chimebox_net_watchdog_target | default('') }}"
+
+log() {
+    /usr/bin/logger -t "${LOG_TAG}" -- "$*"
+}
+
+# Resolve the target IP. If the operator configured a fixed
+# target, use it; otherwise grab the current default gateway.
+# Empty result (no default route) is treated as a soft failure:
+# we log and exit 0, because there's no recovery action to take
+# when we don't even know what to ping.
+resolve_target() {
+    if [[ -n "${CONFIGURED_TARGET}" ]]; then
+        echo "${CONFIGURED_TARGET}"
+        return 0
+    fi
+    /usr/sbin/ip route show default 2>/dev/null \
+        | awk '/^default/ { print $3; exit }'
+}
+
+read_fail_count() {
+    if [[ -r "${STATE_FILE}" ]]; then
+        local val
+        val=$(cat "${STATE_FILE}" 2>/dev/null)
+        if [[ "${val}" =~ ^[0-9]+$ ]]; then
+            echo "${val}"
+            return
+        fi
+    fi
+    echo 0
+}
+
+write_fail_count() {
+    echo "$1" > "${STATE_FILE}"
+}
+
+# Recovery: try nmcli first, then systemctl restart NetworkManager.
+# Return 0 if recovery succeeded (gateway became reachable),
+# nonzero if it didn't.
+attempt_recovery() {
+    local target="$1"
+
+{% if chimebox_net_watchdog_recovery_via_nmcli | bool %}
+    # Get the currently-active NetworkManager connection name.
+    # If multiple are active (rare on a chimebox), use the first.
+    local active
+    active=$(/usr/bin/nmcli -t -f NAME connection show --active 2>/dev/null \
+        | head -1)
+    if [[ -n "${active}" ]]; then
+        log "recovery: nmcli connection up '${active}'"
+        if /usr/bin/nmcli connection up "${active}" >/dev/null 2>&1; then
+            sleep 3
+            if /usr/bin/ping -c 1 -W 5 "${target}" >/dev/null 2>&1; then
+                log "recovery: nmcli connection up succeeded; gateway reachable"
+                return 0
+            fi
+            log "recovery: nmcli connection up returned 0 but gateway still unreachable"
+        else
+            log "recovery: nmcli connection up FAILED"
+        fi
+    else
+        log "recovery: no active NetworkManager connection to restart"
+    fi
+{% endif %}
+
+{% if chimebox_net_watchdog_recovery_via_restart | bool %}
+    log "recovery: systemctl restart NetworkManager.service"
+    if /usr/bin/systemctl restart NetworkManager.service; then
+        # NetworkManager takes ~5-10s to re-associate. Give it a
+        # generous window before declaring failure.
+        sleep 10
+        if /usr/bin/ping -c 1 -W 5 "${target}" >/dev/null 2>&1; then
+            log "recovery: NetworkManager restart succeeded; gateway reachable"
+            return 0
+        fi
+        log "recovery: NetworkManager restart completed but gateway still unreachable"
+    else
+        log "recovery: systemctl restart NetworkManager FAILED"
+    fi
+{% endif %}
+
+    return 1
+}
+
+main() {
+    local target
+    target=$(resolve_target)
+    if [[ -z "${target}" ]]; then
+        log "no default gateway; nothing to check this tick"
+        exit 0
+    fi
+
+    if /usr/bin/ping -c 1 -W 5 "${target}" >/dev/null 2>&1; then
+        local prior
+        prior=$(read_fail_count)
+        if (( prior > 0 )); then
+            log "gateway ${target} reachable; clearing fail count (was ${prior})"
+        fi
+        write_fail_count 0
+        exit 0
+    fi
+
+    local count
+    count=$(read_fail_count)
+    count=$(( count + 1 ))
+    write_fail_count "${count}"
+    log "gateway ${target} unreachable (consecutive failure ${count}/${MAX_FAILURES})"
+
+    if (( count < MAX_FAILURES )); then
+        exit 0
+    fi
+
+    # At threshold: attempt recovery.
+    if attempt_recovery "${target}"; then
+        write_fail_count 0
+        exit 0
+    fi
+
+    log "ALL recovery steps exhausted; gateway ${target} still unreachable. Operator intervention required."
+    # Reset the counter so we don't keep retrying recovery every
+    # tick when it isn't working. The next tick that sees a
+    # MAX-failure run will try recovery again.
+    write_fail_count 0
+    exit 0
+}
+
+main "$@"

@@ -1,0 +1,35 @@
+---
+# roles/net-watchdog/defaults/main.yml
+
+# Master switch. Default ON because chimeboxes that lose
+# networking become operator-locked-out (the kiosk swallows X
+# input, no SSH path, no out-of-band recovery short of a dirty
+# power-cycle). Net-watchdog auto-recovers most common wifi
+# flake scenarios with no operator action.
+chimebox_net_watchdog_enabled: true
+
+# How often the check runs (seconds). 60s keeps recovery
+# responsive without thrashing on transient flakes.
+chimebox_net_watchdog_interval_seconds: 60
+
+# How many consecutive failed checks before recovery is attempted.
+# 3 means a sustained 3-minute outage triggers recovery, while
+# brief flakes (one or two missed packets) are ignored.
+chimebox_net_watchdog_max_consecutive_failures: 3
+
+# Reachability target. Empty string means "use the current default
+# gateway from `ip route`," which auto-adapts to any LAN. Override
+# with a fixed IP if you want a more robust target than the
+# gateway itself (e.g. an internal DNS server known to be up
+# whenever the LAN is healthy).
+chimebox_net_watchdog_target: ""
+
+# Recovery action when threshold is reached. Default is the
+# escalation ladder:
+#   1. nmcli connection up <current active connection>
+#   2. systemctl restart NetworkManager
+# If both fail, the watchdog logs loudly via `logger -t` and gives
+# up; it never reboots the Pi (operator decides whether the
+# situation warrants escalation).
+chimebox_net_watchdog_recovery_via_nmcli: true
+chimebox_net_watchdog_recovery_via_restart: true

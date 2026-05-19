@@ -1,0 +1,46 @@
+---
+# roles/net-watchdog/tasks/main.yml
+#
+# Install a connectivity check + auto-recovery timer. Triggered
+# at boot + every N seconds; logs forensic events to journal via
+# `logger -t chimebox-net-watchdog`.
+#
+# See roles/net-watchdog/README.md for design notes.
+
+- name: Install chimebox-net-watchdog script
+  ansible.builtin.template:
+    src: chimebox-net-watchdog.sh.j2
+    dest: /usr/local/sbin/chimebox-net-watchdog
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart chimebox-net-watchdog.timer
+
+- name: Install chimebox-net-watchdog.service
+  ansible.builtin.template:
+    src: chimebox-net-watchdog.service.j2
+    dest: /etc/systemd/system/chimebox-net-watchdog.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart chimebox-net-watchdog.timer
+
+- name: Install chimebox-net-watchdog.timer
+  ansible.builtin.template:
+    src: chimebox-net-watchdog.timer.j2
+    dest: /etc/systemd/system/chimebox-net-watchdog.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart chimebox-net-watchdog.timer
+
+- name: Enable + start chimebox-net-watchdog.timer
+  ansible.builtin.systemd:
+    name: chimebox-net-watchdog.timer
+    enabled: true
+    state: started
+    daemon_reload: true

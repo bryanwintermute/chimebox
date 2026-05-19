@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+[Unit]
+Description=chimebox connectivity watchdog (check + auto-recover)
+Documentation=man:chimebox-net-watchdog(8)
+# Don't run during system shutdown.
+ConditionPathExists=!/run/systemd/shutdown/scheduled
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/chimebox-net-watchdog
+# Hardening: this runs as root because NetworkManager restart and
+# nmcli connection up need it, but otherwise it's a tiny network
+# probe. Keep the surface minimal.
+NoNewPrivileges=true
+ProtectSystem=strict
+# We need to write /run/chimebox-net-watchdog.state.
+ReadWritePaths=/run
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# Logging goes to syslog (logger -t) and journal.
+StandardOutput=journal
+StandardError=journal

@@ -62,6 +62,9 @@
     - role: panic-button
       tags: [panic-button, panic, recovery]
       when: chimebox_panic_button_enabled | default(true) | bool
+    - role: net-watchdog
+      tags: [net-watchdog, recovery, networking]
+      when: chimebox_net_watchdog_enabled | default(true) | bool
 
   post_tasks:
     - name: Print next steps

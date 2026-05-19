@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Periodically run chimebox-net-watchdog
+
+[Timer]
+# First check shortly after boot (give NetworkManager a chance to
+# come up first). Subsequent checks at the configured interval.
+OnBootSec=90s
+OnUnitActiveSec={{ chimebox_net_watchdog_interval_seconds }}s
+# Randomize slightly so multiple chimeboxes on the same LAN
+# don't ping the gateway in lockstep.
+RandomizedDelaySec=5s
+Unit=chimebox-net-watchdog.service
+
+[Install]
+WantedBy=timers.target
