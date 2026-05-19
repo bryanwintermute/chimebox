@@ -66,6 +66,31 @@ GUI emulator dance.
 Use this unless you need to customize the disk image at build time
 (in which case use the full pipeline below).
 
+#### A note on using infinitemac.org's CDN
+
+The fast path downloads from Mihai Parparita's [Infinite Mac](https://github.com/mihaip/infinite-mac)
+project at `infinitemac.org`. Some things worth knowing if you're
+sending users through this path:
+
+- The CDN is **Cloudflare-fronted** (Cloudflare R2 + Worker), so
+  the chunks are designed for cached high-volume distribution.
+- Chunks are **content-addressed and deduplicated** across all
+  disks — the same Mac OS 8.1 system files are served exactly
+  once across every consumer.
+- We **cache locally** at `~/.chimebox-cache/chunks/`, so re-runs
+  and re-builds reuse already-fetched chunks. A full first fetch
+  is ~1-2 GB; subsequent runs are near-instant.
+- Our fetcher identifies itself with a User-Agent of
+  `chimebox-disk-prep/1 (+https://github.com/bryanwintermute/chimebox)`,
+  so anyone monitoring CDN traffic can identify and contact us
+  if there's ever a concern.
+
+If Mihai or anyone else upstream ever needs us to back off, change
+behavior, or migrate to a self-hosted chunk mirror, please file an
+issue on this repo and we'll respond promptly. The full pipeline
+(`prep.sh`) below is the always-available fallback that touches
+no infinitemac.org infrastructure.
+
 ### Full pipeline: `prep.sh`
 
 Runs Infinite Mac's `import-library` + `import-disks` locally,
