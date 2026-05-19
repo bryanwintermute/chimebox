@@ -55,8 +55,32 @@ except ImportError:
     )
     sys.exit(1)
 
+try:
+    import pyudev
+except ImportError:
+    sys.stderr.write(
+        "chimebox-panic-daemon: python3-pyudev is required "
+        "(apt install python3-pyudev)\n"
+    )
+    sys.exit(1)
+
 
 CONFIG_PATH = "/etc/chimebox-panic-daemon.conf"
+
+# How often to re-scan /dev/input/event* as a safety net for any udev
+# event we might have missed. Belt-and-braces; the udev monitor is the
+# primary hot-plug path.
+RESCAN_INTERVAL_SECONDS = 30.0
+
+# How often to emit a "watching N device(s)" heartbeat line. Makes a
+# silent zero-device daemon visible in journalctl.
+HEARTBEAT_INTERVAL_SECONDS = 300.0
+
+# When a udev 'add' event fires but the devnode isn't yet openable
+# (rare with source='udev', but possible during USB hub re-enumeration),
+# retry on these monotonic offsets from the original event. Total
+# coverage ~3s; beyond that the periodic rescan handles it.
+ADD_RETRY_DELAYS = (0.2, 0.5, 1.0, 2.0)
 
 # Map our friendly modifier names to the set of evdev key codes
 # that satisfy them. Either left or right counts.
@@ -148,25 +172,47 @@ def parse_combos(config: configparser.ConfigParser) -> list[Combo]:
     return combos
 
 
-def find_keyboard_devices() -> list[InputDevice]:
-    """Return all /dev/input/event* devices that look like keyboards."""
-    devices: list[InputDevice] = []
-    for path in list_devices():
-        try:
-            d = InputDevice(path)
-        except (PermissionError, OSError) as exc:
-            log.debug("skipping %s: %s", path, exc)
-            continue
+def is_keyboard_device(d: InputDevice) -> bool:
+    """Return True if the device looks like a keyboard.
+
+    We filter on alpha-key presence to skip power buttons, lid
+    switches, HDMI hotplug pseudo-keyboards, etc. Use either KEY_R or
+    KEY_A so we tolerate the (rare) keyboard that's missing one.
+    """
+    try:
         caps = d.capabilities()
-        keys = caps.get(ecodes.EV_KEY, [])
-        # Look for at least one of the alpha keys to filter out
-        # power buttons, lid switches, sleep buttons, etc.
-        if ecodes.KEY_R in keys or ecodes.KEY_A in keys:
-            devices.append(d)
-            log.info("watching keyboard: %s (%s)", d.path, d.name)
-        else:
-            log.debug("ignoring %s (%s) -- no alpha keys", d.path, d.name)
-    return devices
+    except OSError:
+        return False
+    keys = caps.get(ecodes.EV_KEY, [])
+    return ecodes.KEY_R in keys or ecodes.KEY_A in keys
+
+
+def open_keyboard(path: str) -> InputDevice | None:
+    """Open path as an InputDevice if it's a keyboard, else None.
+
+    Closes the device on filter-miss so we don't leak fds during
+    periodic rescans. Returns None on any open / permission / filter
+    failure; the caller decides whether to retry.
+    """
+    try:
+        d = InputDevice(path)
+    except (PermissionError, OSError) as exc:
+        log.debug("open %s failed: %s", path, exc)
+        return None
+    if not is_keyboard_device(d):
+        log.debug("ignoring %s (%s) -- no alpha keys", d.path, d.name)
+        try:
+            d.close()
+        except Exception:
+            pass
+        return None
+    return d
+
+
+def scan_keyboard_paths() -> list[str]:
+    """Return all /dev/input/event* paths visible to us. Doesn't
+    open them; cheap to call every rescan tick."""
+    return [p for p in list_devices() if p.startswith("/dev/input/event")]
 
 
 @dataclass
@@ -191,7 +237,14 @@ class ModifierState:
             # release
             self.held.discard(key_code)
             self.fired_for_trigger.pop(key_code, None)
-        # value == 2 is autorepeat; we don't change state on those.
+        elif value == 2:
+            # autorepeat. The kernel only emits this for keys it
+            # currently believes are physically held. Add to held so
+            # we can recover modifier state after a state.clear() (as
+            # triggered by a hot-unplug -- see remove_path). Doesn't
+            # disrupt hold_seconds: setdefault keeps the earliest
+            # observed hold-start timestamp per group.
+            self.held.add(key_code)
 
         # Recompute held_since per group.
         for group_name, codes in MODIFIER_GROUPS.items():
@@ -220,6 +273,17 @@ class ModifierState:
             return 0.0
         return time.monotonic() - max(starts)
 
+    def clear(self) -> None:
+        """Forget all in-flight modifier state. Called when a watched
+        device disappears: we have no way to ever see the release
+        events for any keys that were held on that device, so without
+        clearing we'd carry ghost modifiers forever. After clear, a
+        combo can only fire from fresh press events on a still-present
+        (or newly-appeared) device, which is exactly the safe default."""
+        self.held.clear()
+        self.held_since.clear()
+        self.fired_for_trigger.clear()
+
 
 def fire_action(combo: Combo) -> None:
     log.info("combo '%s' fired -> %s", combo.name, combo.action)
@@ -229,78 +293,236 @@ def fire_action(combo: Combo) -> None:
         log.error("failed to invoke '%s': %s", combo.action, exc)
 
 
-def event_loop(devices: list[InputDevice], combos: list[Combo]) -> None:
-    if not devices:
-        log.error("no keyboard devices found; daemon will idle")
-        # Idle-loop so systemd doesn't restart-loop us if the
-        # input layer hasn't enumerated yet (boot race).
-        while True:
-            time.sleep(60)
+def event_loop(combos: list[Combo]) -> None:
     if not combos:
         log.error("no valid combos configured; daemon will idle")
         while True:
             time.sleep(60)
 
+    # Start the udev monitor BEFORE the initial scan so we don't lose
+    # any 'add' events that happen between scan and monitor-start.
+    # source='udev' (the pyudev default) means events fire AFTER udevd
+    # has applied its rules, including permission/symlink settle, so
+    # the devnode is almost always immediately openable.
+    udev_context = pyudev.Context()
+    monitor = pyudev.Monitor.from_netlink(udev_context, source="udev")
+    monitor.filter_by("input")
+    monitor.start()
+
     state = ModifierState()
-    fd_to_device = {d.fd: d for d in devices}
-    log.info("entering event loop with %d device(s) and %d combo(s)",
-             len(devices), len(combos))
+
+    # path is the primary key. fd is derived. We never trust fd
+    # identity for dedup because the kernel reuses fd numbers across
+    # device disappear/reappear cycles.
+    path_to_device: dict[str, InputDevice] = {}
+    # path -> next-retry monotonic deadline; the int is the attempt
+    # index into ADD_RETRY_DELAYS (so we don't retry forever).
+    pending_adds: dict[str, tuple[int, float]] = {}
+
+    def add_path(path: str) -> None:
+        """Try to add path to the watch set. On open failure, schedule
+        a retry via pending_adds. On filter-miss, mark as permanently
+        ignored by NOT scheduling a retry."""
+        if path in path_to_device:
+            return
+        d = open_keyboard(path)
+        if d is None:
+            # Could be transient (permissions still being applied) or
+            # permanent (not a keyboard, e.g. mouse/joystick/HDMI).
+            # We schedule a retry up to ADD_RETRY_DELAYS; the periodic
+            # rescan will eventually re-attempt anyway.
+            attempt, _ = pending_adds.get(path, (0, 0.0))
+            if attempt < len(ADD_RETRY_DELAYS):
+                deadline = time.monotonic() + ADD_RETRY_DELAYS[attempt]
+                pending_adds[path] = (attempt + 1, deadline)
+                log.debug("deferring add of %s (attempt %d/%d)",
+                          path, attempt + 1, len(ADD_RETRY_DELAYS))
+            else:
+                pending_adds.pop(path, None)
+                log.debug("giving up on %s after %d attempts",
+                          path, len(ADD_RETRY_DELAYS))
+            return
+        path_to_device[path] = d
+        pending_adds.pop(path, None)
+        log.info("watching keyboard: %s (%s)", d.path, d.name)
+
+    def remove_path(path: str) -> None:
+        """Drop path from the watch set. Idempotent; safe to call
+        even if path is no longer tracked. Clears modifier state to
+        avoid ghost-held keys (no release events will ever arrive
+        from a vanished device)."""
+        d = path_to_device.pop(path, None)
+        if d is None:
+            pending_adds.pop(path, None)
+            return
+        try:
+            d.close()
+        except Exception:
+            pass
+        log.info("stopped watching: %s", path)
+        # Critical: clear all in-flight modifier state. Otherwise a
+        # kid who was holding Ctrl+Alt+Shift+R when their keyboard
+        # disconnected would have ghost modifiers stuck "down" until
+        # daemon restart, and the next keyboard could fire combos
+        # from a single trigger key press.
+        state.clear()
+
+    def log_watch_summary(prefix: str) -> None:
+        if not path_to_device:
+            log.warning("%s: watching 0 device(s) -- hotkeys will not "
+                        "fire until a keyboard is plugged in", prefix)
+            return
+        summary = ", ".join(
+            f"{os.path.basename(p)}={d.name}"
+            for p, d in sorted(path_to_device.items())
+        )
+        log.info("%s: watching %d device(s): %s",
+                 prefix, len(path_to_device), summary)
+
+    def rescan() -> None:
+        """Safety net: enumerate /dev/input/event* and add any
+        keyboards we're not yet watching. Cheap; covers any udev
+        event we may have missed (rare but possible during USB hub
+        re-enumeration storms)."""
+        seen = set(scan_keyboard_paths())
+        # Drop paths that no longer exist (e.g., we missed a 'remove').
+        stale = [p for p in path_to_device if p not in seen]
+        for p in stale:
+            log.info("rescan: %s disappeared (no udev event seen)", p)
+            remove_path(p)
+        # Add paths that have appeared.
+        for p in sorted(seen):
+            if p not in path_to_device:
+                add_path(p)
+
+    # Seed with whatever's plugged in right now, then drain any udev
+    # events that fired during the monitor.start() -> rescan() window.
+    rescan()
+    drain_udev_events(monitor, add_path, remove_path)
+    log_watch_summary("startup")
+
+    next_rescan_at = time.monotonic() + RESCAN_INTERVAL_SECONDS
+    next_heartbeat_at = time.monotonic() + HEARTBEAT_INTERVAL_SECONDS
+    last_summary_signature: tuple[str, ...] = tuple(sorted(path_to_device))
 
     while True:
+        now = time.monotonic()
+        # Deadline-driven timeout: select() must return by the soonest
+        # of (next rescan, next heartbeat, next pending-add retry).
+        # Otherwise a noisy device's reads could keep select() returning
+        # before our 30s rescan deadline ever elapses.
+        deadlines = [next_rescan_at, next_heartbeat_at]
+        deadlines.extend(t for _, t in pending_adds.values())
+        timeout = max(0.0, min(deadlines) - now)
+
+        watch_fds = [monitor.fileno()]
+        watch_fds.extend(d.fd for d in path_to_device.values())
+
         try:
-            r, _, _ = select.select(fd_to_device.keys(), [], [], 30.0)
+            r, _, _ = select.select(watch_fds, [], [], timeout)
         except OSError as exc:
             if exc.errno == errno.EINTR:
                 continue
             raise
 
-        for fd in r:
-            device = fd_to_device[fd]
+        # 1. Process udev hot-plug events first so newly-added
+        #    keyboards can contribute press events in this same tick.
+        if monitor.fileno() in r:
+            drain_udev_events(monitor, add_path, remove_path)
+
+        # 2. Process key events from currently-watched devices. Iterate
+        #    a snapshot of the fd list because remove_path mutates it.
+        for fd in list(r):
+            if fd == monitor.fileno():
+                continue
+            # Look up device by fd. If the device was just removed via
+            # a udev event in step 1, skip silently.
+            device = next((d for d in path_to_device.values() if d.fd == fd),
+                          None)
+            if device is None:
+                continue
             try:
                 events = list(device.read())
             except OSError as exc:
                 if exc.errno in (errno.ENODEV, errno.EBADF):
-                    log.warning("device %s went away; removing", device.path)
-                    fd_to_device.pop(fd, None)
-                    try:
-                        device.close()
-                    except Exception:
-                        pass
+                    log.warning("device %s went away mid-read", device.path)
+                    remove_path(device.path)
                     continue
                 raise
             for ev in events:
                 if ev.type != ecodes.EV_KEY:
                     continue
-                key_code = ev.code
-                value = ev.value
-                state.update(key_code, value)
-                # Fire combos on the trigger's press (value=1) OR
-                # while it's still held (autorepeat, value=2). The
-                # autorepeat path is what makes hold_seconds work
-                # naturally when the user mashes all keys at once:
-                # the combo fires as soon as the modifiers have
-                # been held long enough, even if the trigger went
-                # down before the threshold elapsed. We use
-                # state.fired_for_trigger to ensure a single press
-                # fires each combo at most once.
-                if value not in (1, 2):
-                    continue
-                for combo in combos:
-                    if key_code != combo.trigger_key_code:
-                        continue
-                    if state.has_fired(key_code, combo.name):
-                        continue
-                    if not state.all_held(combo.modifier_groups):
-                        continue
-                    if combo.hold_seconds > 0:
-                        if state.held_for(combo.modifier_groups) < combo.hold_seconds:
-                            log.debug("combo '%s' modifiers held only %.2fs (need %.2fs)",
-                                      combo.name,
-                                      state.held_for(combo.modifier_groups),
-                                      combo.hold_seconds)
-                            continue
-                    fire_action(combo)
-                    state.mark_fired(key_code, combo.name)
+                process_key_event(ev.code, ev.value, state, combos)
+
+        # 3. Service deadline-driven timers.
+        now = time.monotonic()
+
+        # Retry deferred adds whose deadline has passed.
+        ready_retries = [p for p, (_, t) in pending_adds.items() if t <= now]
+        for path in ready_retries:
+            add_path(path)
+
+        if now >= next_rescan_at:
+            rescan()
+            next_rescan_at = now + RESCAN_INTERVAL_SECONDS
+
+        # Log on watch-set change OR heartbeat tick.
+        cur_signature = tuple(sorted(path_to_device))
+        if cur_signature != last_summary_signature:
+            log_watch_summary("change")
+            last_summary_signature = cur_signature
+        elif now >= next_heartbeat_at:
+            log_watch_summary("heartbeat")
+            next_heartbeat_at = now + HEARTBEAT_INTERVAL_SECONDS
+
+
+def drain_udev_events(monitor, add_path, remove_path) -> None:
+    """Read all currently-pending events from the udev monitor
+    without blocking. monitor.poll(0) returns the next event or None
+    if the queue is empty."""
+    while True:
+        event = monitor.poll(timeout=0)
+        if event is None:
+            return
+        action = event.action
+        devnode = event.device_node
+        if devnode is None or not devnode.startswith("/dev/input/event"):
+            continue
+        if action == "add":
+            add_path(devnode)
+        elif action == "remove":
+            remove_path(devnode)
+        # 'change', 'bind', 'unbind', etc. are ignored.
+
+
+def process_key_event(key_code: int, value: int, state: "ModifierState",
+                      combos: list[Combo]) -> None:
+    state.update(key_code, value)
+    # Fire combos on the trigger's press (value=1) OR while it's
+    # still held (autorepeat, value=2). The autorepeat path is what
+    # makes hold_seconds work naturally when the user mashes all
+    # keys at once: the combo fires as soon as the modifiers have
+    # been held long enough, even if the trigger went down before
+    # the threshold elapsed. We use state.fired_for_trigger to ensure
+    # a single press fires each combo at most once.
+    if value not in (1, 2):
+        return
+    for combo in combos:
+        if key_code != combo.trigger_key_code:
+            continue
+        if state.has_fired(key_code, combo.name):
+            continue
+        if not state.all_held(combo.modifier_groups):
+            continue
+        if combo.hold_seconds > 0:
+            if state.held_for(combo.modifier_groups) < combo.hold_seconds:
+                log.debug("combo '%s' modifiers held only %.2fs (need %.2fs)",
+                          combo.name,
+                          state.held_for(combo.modifier_groups),
+                          combo.hold_seconds)
+                continue
+        fire_action(combo)
+        state.mark_fired(key_code, combo.name)
 
 
 def main() -> int:
@@ -317,8 +539,6 @@ def main() -> int:
                  ecodes.keys[c.trigger_key_code].replace("KEY_", ""),
                  c.action, c.hold_seconds)
 
-    devices = find_keyboard_devices()
-
     # Cleanly exit on SIGTERM / SIGINT so systemd stops us nicely.
     def _shutdown(signum, _frame):
         log.info("got signal %d; exiting", signum)
@@ -327,7 +547,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, _shutdown)
 
     try:
-        event_loop(devices, combos)
+        event_loop(combos)
     except Exception:
         log.exception("fatal error in event loop")
         return 2

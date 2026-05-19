@@ -17,10 +17,11 @@
 # want to leave the partial-fix xbindkeys path in place rather
 # than ending up with neither.
 
-- name: Install python3-evdev
+- name: Install python3-evdev and python3-pyudev
   ansible.builtin.apt:
     name:
       - python3-evdev
+      - python3-pyudev
     state: present
     update_cache: true
     cache_valid_time: 3600
