@@ -39,6 +39,10 @@ secrets/
 *.retry
 roles/*/files/local-*
 pi/ansible/inventory.ini
+# Per-host inventory variants (e.g. inventory.cb-bryan.ini) are
+# operator-local config; pattern matches inventory.*.ini.
+pi/ansible/inventory.*.ini
+!pi/ansible/inventory.example.ini
 pi/ansible/.vault_pass
 # Per-host local overrides (e.g., your actual LAN CIDR). Live alongside
 # the committed host_vars/<host>/main.yml but stay out of git.
