@@ -21,6 +21,19 @@
     name: "getty@tty{{ item }}.service"
     masked: true
   loop: [2, 3, 4, 5, 6]
+  # When escape-to-tty is enabled, leave that one VT unmasked so
+  # the panic-daemon's escape combo can land on an actual login
+  # prompt. X's DontVTSwitch above still blocks the kid from
+  # Ctrl+Alt+Fn directly; only the long-hold panic combo (which
+  # reads evdev below X) gets there.
+  when: not (chimebox_panic_button_escape_to_tty_enabled | default(false) | bool) or
+        item != (chimebox_panic_button_escape_to_tty_target_vt | default(2) | int)
+
+- name: Unmask escape-to-tty target VT (only when escape is enabled)
+  ansible.builtin.systemd:
+    name: "getty@tty{{ chimebox_panic_button_escape_to_tty_target_vt | default(2) | int }}.service"
+    masked: false
+  when: chimebox_panic_button_escape_to_tty_enabled | default(false) | bool
 
 - name: Verify chimebox user has no sudoers entries
   ansible.builtin.shell: |

@@ -43,3 +43,11 @@ trigger     = {{ chimebox_panic_button_kid_reset_trigger }}
 action      = /usr/local/sbin/chimebox-reset-latest
 hold_seconds = {{ chimebox_panic_button_kid_reset_hold_seconds }}
 {% endif %}
+
+{% if chimebox_panic_button_escape_to_tty_enabled | bool %}
+[combo:escape-to-tty]
+modifiers   = {{ chimebox_panic_button_escape_to_tty_modifiers | join(', ') }}
+trigger     = {{ chimebox_panic_button_escape_to_tty_trigger }}
+action      = /usr/local/sbin/chimebox-escape-to-tty
+hold_seconds = {{ chimebox_panic_button_escape_to_tty_hold_seconds }}
+{% endif %}

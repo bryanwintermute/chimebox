@@ -63,3 +63,34 @@ chimebox_panic_button_kid_reset_modifiers:
   - shift
 chimebox_panic_button_kid_reset_trigger: z
 chimebox_panic_button_kid_reset_hold_seconds: 1.5
+
+# Whether to wire an operator-only "escape to a Linux console" combo.
+# Off by default. When ON, holding Ctrl+Alt+Shift+T for 3 seconds
+# switches the display from tty1 (X + BasiliskII) to tty2 (a plain
+# getty login prompt). This is the OUT-OF-BAND recovery path for
+# when the Pi's networking has died but the kiosk is still running:
+# without it, JetKVM/HDMI shows the Mac but X grabs every keystroke,
+# leaving the operator with no way to reach a shell short of a
+# power-cycle (which dirties the disk).
+#
+# X and BasiliskII keep running on tty1; the operator returns to
+# the Mac with Ctrl+Alt+F1 (which works from a plain tty because
+# there's no X grab on tty2).
+#
+# KEEP OFF for kid-handoff chimeboxes: a 3-modifier 3-second-hold
+# combo is hard to fire by accident, but enabling this also means
+# an admin login prompt is one tty switch away. Default is opt-in
+# for that reason; enable on dev/operator chimeboxes only.
+#
+# When enabled, this role also enables getty@tty2.service so the
+# login prompt is always running and ready, and adds
+# CAP_SYS_TTY_CONFIG to the panic-daemon's capability set so it
+# can invoke chvt(1) (which uses the VT_ACTIVATE ioctl).
+chimebox_panic_button_escape_to_tty_enabled: false
+chimebox_panic_button_escape_to_tty_modifiers:
+  - ctrl
+  - alt
+  - shift
+chimebox_panic_button_escape_to_tty_trigger: t
+chimebox_panic_button_escape_to_tty_hold_seconds: 3.0
+chimebox_panic_button_escape_to_tty_target_vt: 2

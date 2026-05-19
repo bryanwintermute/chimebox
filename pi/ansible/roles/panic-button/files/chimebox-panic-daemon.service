@@ -55,8 +55,14 @@ MemoryDenyWriteExecute=true
 #                          owned by chimebox:chimebox
 #   CAP_FOWNER          -- mv across ownership for the .tmp -> final
 #                          rename in chimebox-reset
-CapabilityBoundingSet=CAP_KILL CAP_CHOWN CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_FOWNER
-AmbientCapabilities=CAP_KILL CAP_CHOWN CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_FOWNER
+#   CAP_SYS_TTY_CONFIG  -- chimebox-escape-to-tty calls chvt(1),
+#                          which uses VT_ACTIVATE ioctl. Required
+#                          only when the optional escape-to-tty
+#                          combo is enabled; harmless otherwise
+#                          since chvt is never invoked without an
+#                          enabled combo.
+CapabilityBoundingSet=CAP_KILL CAP_CHOWN CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_TTY_CONFIG
+AmbientCapabilities=CAP_KILL CAP_CHOWN CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_TTY_CONFIG
 
 # Logging goes to stderr (journal) and syslog (logger -t).
 StandardOutput=journal

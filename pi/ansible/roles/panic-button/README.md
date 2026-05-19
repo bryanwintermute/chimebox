@@ -50,7 +50,7 @@ architectural rationale.
 | Systemd unit | `/etc/systemd/system/chimebox-panic-daemon.service` | Supervises the daemon; hardened |
 | Force-reset action | `/usr/local/sbin/chimebox-force-reset` | SIGKILLs BasiliskII; supervisor respawns |
 | Emergency-stop action | `/usr/local/sbin/chimebox-emergency-stop` | (optional) full kiosk teardown |
-| Apt deps | `python3-evdev` | Python evdev bindings |
+| Apt deps | `python3-evdev`, `python3-pyudev` | Python evdev bindings + udev netlink monitor (for hot-plug) |
 
 ## Default keystroke
 
@@ -126,6 +126,40 @@ Total cycle ~30 seconds, similar to running kid-reset over SSH.
 If no snapshots exist (extremely rare), the helper logs a
 clear message and exits cleanly without touching `System.dsk`.
 
+## Optional: escape-to-tty combo (operator-only)
+
+Default Ctrl+Alt+Shift+T held 3 seconds switches the active console
+from tty1 (X + BasiliskII) to tty2 (a plain getty login prompt).
+This is the **out-of-band recovery path for when the Pi's network
+is dead but the kiosk is still running**: without it, JetKVM/HDMI
+shows the Mac but X has grabbed every keystroke, and the operator
+has no way to reach a shell short of a power-cycle (which dirties
+the disk).
+
+The Mac keeps running on tty1 while the operator works on tty2.
+Return to the Mac with **Ctrl+Alt+F1** — that works from a plain
+tty because there's no X grab.
+
+**Off by default.** A 3-modifier 3-second hold is hard to fire by
+accident, but enabling this also means an admin login prompt is
+one tty switch away. Enable on dev/operator chimeboxes; **keep off
+for kid handoffs**.
+
+When enabled, the role also enables `getty@tty2.service` so a login
+prompt is always ready, and adds `CAP_SYS_TTY_CONFIG` to the
+daemon's capability set so `chvt(1)` can call `VT_ACTIVATE`.
+
+Enable in `host_vars`:
+
+```yaml
+chimebox_panic_button_escape_to_tty_enabled: true
+# Optional overrides (defaults are sensible):
+chimebox_panic_button_escape_to_tty_modifiers: [ctrl, alt, shift]
+chimebox_panic_button_escape_to_tty_trigger: t
+chimebox_panic_button_escape_to_tty_hold_seconds: 3.0
+chimebox_panic_button_escape_to_tty_target_vt: 2
+```
+
 ## Modifier-hold gating
 
 For combos that aren't quite as obscure as 4-modifier, the daemon
@@ -157,16 +191,25 @@ panic-button usage.
 
 ## How keyboard hot-plug is handled
 
-Currently: the daemon enumerates keyboards at startup and
-ignores hot-plug. If a USB keyboard is plugged in *after* the
-daemon starts, that keyboard's keys won't fire combos.
+The daemon integrates a `pyudev` netlink monitor (source=`udev`) and
+a 30-second periodic rescan in the same `select()` loop. USB
+keyboard hot-plug works automatically:
 
-Workaround: `sudo systemctl restart chimebox-panic-daemon` after
-plugging in a new keyboard. (Or `Restart=always` plus a future
-udev rule that triggers the restart on new input devices.)
+- New keyboard plugged in: picked up within ~1s (udev `add` event).
+- Keyboard unplugged: dropped immediately; modifier state is cleared
+  to prevent ghost-held keys from a vanished device firing combos
+  on a different keyboard.
+- KVM swap (pikvm → JetKVM, etc.) or USB hub power-glitch: the
+  old device disappears, the new device is picked up automatically.
 
-For the chimebox-dev kiosk this is a non-issue (PiKVM keyboard
-+ optional fixed wired keyboard are present at boot).
+Observability: the journal logs `change: watching N device(s): event0=name, event3=name`
+on every watch-set change, and a `heartbeat: watching N device(s)`
+every 5 minutes. A silent zero-device daemon is visible as a
+WARNING line in `journalctl -u chimebox-panic-daemon`.
+
+Diagnosing "the panic combo isn't firing": run
+`journalctl -u chimebox-panic-daemon | grep -E '(watching|went away)'`
+to see the device history.
 
 ## Variables
 
@@ -183,6 +226,11 @@ For the chimebox-dev kiosk this is a non-issue (PiKVM keyboard
 | `chimebox_panic_button_kid_reset_modifiers` | `[ctrl, alt, shift]` | Modifiers for kid-reset |
 | `chimebox_panic_button_kid_reset_trigger` | `z` | Trigger for kid-reset |
 | `chimebox_panic_button_kid_reset_hold_seconds` | `1.5` | Hold-time gate (seconds) for kid-reset |
+| `chimebox_panic_button_escape_to_tty_enabled` | `false` | Wire the operator-only escape-to-tty combo |
+| `chimebox_panic_button_escape_to_tty_modifiers` | `[ctrl, alt, shift]` | Modifiers for escape-to-tty |
+| `chimebox_panic_button_escape_to_tty_trigger` | `t` | Trigger key for escape-to-tty |
+| `chimebox_panic_button_escape_to_tty_hold_seconds` | `3.0` | Hold-time gate for escape-to-tty |
+| `chimebox_panic_button_escape_to_tty_target_vt` | `2` | VT to switch to when the combo fires |
 
 ## Future enhancements
 
@@ -195,8 +243,6 @@ For the chimebox-dev kiosk this is a non-issue (PiKVM keyboard
   devices. A physical button wired to the Pi could fire the
   same actions, accessible to a kid who doesn't know the
   keystroke combo.
-- **Hot-plug support via udev**: monitor for new input devices
-  and dynamically open them.
 
 ## See also
 

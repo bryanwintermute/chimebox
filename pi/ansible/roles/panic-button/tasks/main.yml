@@ -52,6 +52,31 @@
     group: root
     mode: "0750"
 
+- name: Install chimebox-escape-to-tty helper
+  ansible.builtin.template:
+    src: chimebox-escape-to-tty.sh.j2
+    dest: /usr/local/sbin/chimebox-escape-to-tty
+    owner: root
+    group: root
+    mode: "0750"
+
+# When the escape-to-tty combo is enabled, ensure a login prompt
+# is running on the target tty so the operator can log in
+# immediately on switch. Without an active getty, chvt would
+# leave them staring at a blank screen.
+#
+# This is also conditionally REMOVED when the feature is disabled
+# (state=stopped+disabled) so we don't leave a stray login prompt
+# active on kid-handoff chimeboxes.
+- name: Manage getty for escape-to-tty target VT
+  ansible.builtin.systemd:
+    name: "getty@tty{{ chimebox_panic_button_escape_to_tty_target_vt }}.service"
+    enabled: "{{ chimebox_panic_button_escape_to_tty_enabled | bool }}"
+    state: "{{ 'started' if (chimebox_panic_button_escape_to_tty_enabled | bool) else 'stopped' }}"
+    daemon_reload: false
+  # tty1 is reserved for the kiosk's autologin; refuse to touch it.
+  when: chimebox_panic_button_escape_to_tty_target_vt | int != 1
+
 # --- Daemon, config, systemd unit --------------------------------------
 
 - name: Install chimebox-panic-daemon

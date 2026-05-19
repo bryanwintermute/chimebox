@@ -1,0 +1,24 @@
+---
+# host_vars/chimebox-bryan/main.yml -- overrides for chimebox-bryan.
+# This file is committed; values are not secrets, just per-host config.
+
+# Pi 5 is housed in an Argon One V3 case; install the fan daemon.
+chimebox_argon_one_v3: true
+
+# This dev Pi is currently being driven via PiKVM as well as a local
+# monitor. The pillarbox display profile breaks PiKVM (window/canvas
+# size mismatch -> absolute coords don't map cleanly). Use the matched
+# profile so PiKVM works; the local-monitor display becomes 1024x768
+# stretched to fill the screen, which is fine for development.
+chimebox_display_profile: matched-stretched
+
+# Opt the dev kiosk into the kid-reset panic-daemon combo so we can
+# validate it end-to-end. Default for general users is off; we enable
+# explicitly here.
+chimebox_panic_button_kid_reset_enabled: true
+
+# This is an operator/dev chimebox, not a kid-handoff. Enable the
+# escape-to-tty combo so we can recover from network outages
+# without a dirty power-cycle. Ctrl+Alt+Shift+T held 3s switches
+# to tty2 (getty login); Ctrl+Alt+F1 returns to the Mac.
+chimebox_panic_button_escape_to_tty_enabled: true

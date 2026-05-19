@@ -1,0 +1,40 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-escape-to-tty
+#
+# Operator-only "escape to a Linux console" action. Fired by the
+# panic-daemon when the configured combo (default Ctrl+Alt+Shift+T
+# held 3s) is pressed.
+#
+# X and BasiliskII keep running on tty1; this just switches the
+# active console to tty{{ chimebox_panic_button_escape_to_tty_target_vt }}
+# so a plain getty login prompt is visible. Return to the Mac with
+# Ctrl+Alt+F1, which works from a plain tty (no X grab).
+#
+# CAP_SYS_TTY_CONFIG must be in the daemon's bounding+ambient set
+# for chvt(1)'s VT_ACTIVATE ioctl to succeed. The role adds that
+# capability when this feature is enabled.
+
+set -u
+
+TARGET_VT={{ chimebox_panic_button_escape_to_tty_target_vt }}
+
+logger -t chimebox-escape-to-tty "operator escape combo fired -- switching console to tty${TARGET_VT}"
+
+# Verify the target tty has a getty before switching: switching to
+# an idle vt leaves the operator staring at a blank screen, which
+# would look indistinguishable from "the combo did nothing." Better
+# to fail loudly with a journal line than to silently confuse.
+if ! systemctl is-active --quiet "getty@tty${TARGET_VT}.service"; then
+    logger -t chimebox-escape-to-tty \
+        "WARNING: getty@tty${TARGET_VT}.service is not active; switching anyway"
+fi
+
+if ! /usr/bin/chvt "${TARGET_VT}"; then
+    logger -t chimebox-escape-to-tty \
+        "ERROR: chvt ${TARGET_VT} failed (rc=$?); is CAP_SYS_TTY_CONFIG in the daemon's caps?"
+    exit 1
+fi
+
+logger -t chimebox-escape-to-tty "console now on tty${TARGET_VT}; Ctrl+Alt+F1 to return"
+exit 0
