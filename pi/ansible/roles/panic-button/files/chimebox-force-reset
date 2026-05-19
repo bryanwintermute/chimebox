@@ -1,5 +1,4 @@
 #!/bin/bash
-# {{ ansible_managed }}
 # /usr/local/sbin/chimebox-force-reset
 #
 # Force-reset the emulated Mac by SIGKILLing BasiliskII. The

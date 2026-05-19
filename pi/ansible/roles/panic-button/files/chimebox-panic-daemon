@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# {{ ansible_managed }}
 """chimebox-panic-daemon
 
 Listens to all keyboard-class /dev/input/event* devices and fires

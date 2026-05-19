@@ -1,7 +1,9 @@
 # disk-prep
 
 Workstation-side tooling that produces the disk images a chimebox boots from.
-**Run on macOS** (Apple Silicon supported). The output goes to
+**Fast path (`4-fetch-cdn.sh`) runs on Linux and macOS;** the full
+local-build pipeline (`prep.sh`) still requires macOS for the
+GUI-emulator desktop-database step. The output goes to
 `../disks/` (gitignored) and is later pushed to the Pi via
 `../scripts/push-disks.sh`.
 
@@ -19,12 +21,14 @@ For chimebox v1, **`System.dsk` ships as the stock Infinite Mac image** —
 no chimebox-specific customization. Customization (kid shortcuts on Desktop,
 hidden Developer/, etc.) is deferred to a future step.
 
-## Why this lives on macOS
+## Why macOS-only for the full pipeline
 
 Infinite Mac's `import-disks` pipeline invokes **native** Mini vMac and
 Basilisk II as a final step to rebuild the desktop database on the produced
 disk. That step works cleanly on macOS today; a Linux/Docker port is on the
-roadmap but is not v1.
+roadmap but is not v1. The fast path (`4-fetch-cdn.sh`) sidesteps this
+entirely by downloading pre-built chunks from `infinitemac.org` and
+reassembling them locally — that works on Linux and macOS.
 
 ## How it's wired
 
@@ -109,14 +113,19 @@ disks/
 
 ## Prerequisites
 
-- macOS (Apple Silicon or Intel).
-- **Xcode Command Line Tools** (`xcode-select --install`).
-- **`uv`** for Python package management — `0-bootstrap.sh` installs it if
-  missing.
-- A working **Mini vMac** and **Basilisk II** native build (the Infinite Mac
-  README documents how to obtain these for the `import-disks` step).
+- **For the fast path:** Linux or macOS. Python 3 + standard
+  utilities; no GUI emulators needed. `0-bootstrap.sh` is not
+  required for this path.
+- **For the full pipeline:**
+  - macOS (Apple Silicon or Intel).
+  - **Xcode Command Line Tools** (`xcode-select --install`).
+  - **`uv`** for Python package management — `0-bootstrap.sh` installs it if
+    missing.
+  - A working **Mini vMac** and **Basilisk II** native build (the Infinite Mac
+    README documents how to obtain these for the `import-disks` step).
 
-`0-bootstrap.sh` will check these and print clear errors for what's missing.
+`0-bootstrap.sh` will check the full-pipeline prerequisites and
+print clear errors for what's missing.
 
 ## Obtaining the ROM
 

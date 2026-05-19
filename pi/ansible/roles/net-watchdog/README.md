@@ -71,7 +71,7 @@ server that's always up when the LAN is healthy) rather than the
 gateway itself:
 
 ```yaml
-chimebox_net_watchdog_target: 10.20.0.1
+chimebox_net_watchdog_target: 192.168.1.1
 ```
 
 ## Observability

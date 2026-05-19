@@ -160,5 +160,6 @@ What goes away:
 - `roles/recovery-keystroke/` — the xbindkeys-based first attempt.
 - `sdl2-x11-remote-pointer-unclutter.md` (myconfigs lessons) —
   why we set `SDL_VIDEO_X11_XINPUT2=1` in the first place.
-- The auto-detect-wedged-Mac SQL todo — natural sibling to this
-  daemon; same input-monitoring infrastructure.
+- The "auto-detect wedged Mac" idea in `roles/panic-button/README.md`'s
+  Future enhancements — natural sibling to this daemon; same
+  input-monitoring infrastructure.

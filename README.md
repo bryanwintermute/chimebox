@@ -5,7 +5,7 @@
 
 ## Status
 
-**v1 complete; first real kid-handoff imminent.** On the dev Pi 5
+**v1 complete.** On the dev Pi 5
 kiosk, chimebox boots directly into Mac OS 8.1 with a curated
 kid-shortlist Desktop, respawns the emulator after guest
 shutdown, auto-mounts USB sticks as Mac volumes, routes audio
@@ -196,8 +196,10 @@ see [`docs/era-decisions.md`](./docs/era-decisions.md).
 - The Outside World extfs volume's name is hardcoded by BasiliskII to
   "Unix" and is not currently overridable from chimebox without
   patching BasiliskII source.
-- Disk-prep on Linux is not yet supported; macOS is required for
-  building images. Linux disk-prep is on the roadmap.
+- Disk-prep's fast path (`4-fetch-cdn.sh`) works on Linux and
+  macOS; the full local-build pipeline (`prep.sh`) still requires
+  macOS for the GUI-emulator desktop-database rebuild. Linux
+  full-pipeline support is on the roadmap.
 - `chimebox.service` (systemd) is installed but disabled in v1; the
   active supervisor is the autologin → startx → start.sh chain.
 

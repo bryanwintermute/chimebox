@@ -238,7 +238,7 @@ to see the device history.
   CPU/input/screen-change monitoring. When BasiliskII has been
   at >90% CPU AND there's been no keystroke or pointer event AND
   the screen hasn't changed for N seconds, fire force-reset
-  automatically. Tracked separately as `detect-wedged-mac`.
+  automatically.
 - **GPIO panic button**: `evdev` can also read GPIO-mapped input
   devices. A physical button wired to the Pi could fire the
   same actions, accessible to a kid who doesn't know the

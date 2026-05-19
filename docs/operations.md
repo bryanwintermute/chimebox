@@ -189,9 +189,9 @@ contents, new ROM, etc.), push the results to the Pi:
 
 Idempotent rsync. Only changed bytes are sent. Push-disks
 does NOT stop the kiosk first — for the safest "fresh install"
-flow that includes kiosk stop/restart, see the followup todo
-`ops-fresh-install-recipe`. For now if you want a clean swap,
-manually:
+flow that includes kiosk stop/restart, see
+[issue #7](https://github.com/bryanwintermute/chimebox/issues/7).
+For now if you want a clean swap, manually:
 
 ```sh
 ssh admin@HOST 'sudo systemctl stop getty@tty1.service'
