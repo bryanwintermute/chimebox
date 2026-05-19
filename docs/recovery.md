@@ -72,18 +72,23 @@ re-launching in BasiliskII.
 
 ### If force-reset didn't fire
 
-The panic daemon enumerates keyboards at *daemon startup time*.
-If a keyboard was plugged in *after* boot, combos may not fire.
+Check that the daemon currently has a keyboard to watch:
+
+```sh
+journalctl -u chimebox-panic-daemon -n 5 --no-pager \
+    | grep -E "watching|went away"
+```
+
+You should see a recent `change: watching N device(s): eventN=...`
+line. If you see `watching 0 device(s)`, no keyboard is reaching
+the daemon — likely a USB device just disappeared (cable wiggle,
+hub power-glitch, KVM swap). The daemon will auto re-pick-up
+within ~1s when the device reappears via its udev hot-plug
+monitor; if it doesn't, force a rescan:
 
 ```sh
 sudo systemctl restart chimebox-panic-daemon
-# Then re-try the combo.
-journalctl -u chimebox-panic-daemon --since '1 minute ago' \
-    | grep 'watching keyboard'
 ```
-
-You should see a `watching keyboard: /dev/input/eventN (Device Name)`
-line that matches your actual keyboard.
 
 If still nothing fires when you press the combo: SSH in and
 force-reset by hand:
@@ -344,6 +349,22 @@ ssh admin@chimebox-dev 'ls -l /run/chimebox-bedtime 2>&1'
 `ssh admin@chimebox-dev` hangs, times out, or returns
 "Connection refused" / "No route to host".
 
+### First: wait 3-4 minutes
+
+If `chimebox_net_watchdog_enabled` is on (the default), the
+`chimebox-net-watchdog.timer` is checking the gateway every 60s
+and will attempt recovery (`nmcli connection up`, then
+`systemctl restart NetworkManager`) after 3 consecutive failures.
+Most transient wifi flakes self-heal within 3-4 minutes.
+
+You can verify the watchdog is running from another chimebox or
+once SSH returns:
+
+```sh
+systemctl list-timers chimebox-net-watchdog.timer
+journalctl -t chimebox-net-watchdog --since '15 min ago'
+```
+
 ### Try first
 
 From your workstation:
@@ -361,26 +382,32 @@ ssh -v admin@chimebox-dev      # verbose SSH; gets you the exact failure point
 
 ### Recover
 
-For a fully-bricked Pi from network perspective, you have three
+For a fully-bricked Pi from a network perspective, you have these
 options ranked by least to most disruptive:
 
-1. **Console keyboard + monitor.** Plug a USB keyboard into the
-   Pi, monitor into HDMI. Login as the admin user at the Mac OS
-   kiosk... wait, you can't, that's the kiosk. To get a host
-   shell you'd need to (a) interrupt the autologin chain at boot
-   (TTY switching is locked by `lockdown` role on a normal
-   chimebox, so you'd need to first edit `/boot/firmware/cmdline.txt`
-   to disable autologin, then reboot), or (b) press
-   `Ctrl+Alt+F2` *if* that wasn't locked away. In practice:
-   plug-and-pray on chimebox is hard because we've explicitly
-   locked the kiosk down. This option is essentially
-   "physically remove the SD/NVMe and edit it on another machine."
+1. **The escape-to-tty combo** (if enabled in `host_vars`). If the
+   Pi's screen is up (HDMI-attached monitor, JetKVM, or pikvm view)
+   and the kiosk is showing the Mac, hold
+   **`Ctrl+Alt+Shift+T` for 3 seconds**. This switches the active
+   console from tty1 (X + BasiliskII) to tty2, where a getty
+   login prompt is waiting. Log in as the admin user and debug
+   from there. Return to the Mac with `Ctrl+Alt+F1` (works from a
+   plain tty — no X grab to fight). This combo is **off by default
+   for kid-handoff chimeboxes** (it puts an admin login one
+   keystroke combo away from a kid); enable per-host via
+   `chimebox_panic_button_escape_to_tty_enabled: true` on operator
+   chimeboxes where the surface is acceptable.
 
-2. **PiKVM / IPMI / out-of-band management.** If you set up a
-   PiKVM specifically for this chimebox (as our dev box has),
-   use it to get a console.
+2. **PiKVM / JetKVM / IPMI / out-of-band management.** If you set
+   up a KVM for this chimebox, use it to interact with the
+   keyboard. Note: without option (1) enabled, the KVM's keyboard
+   input is still grabbed by X — you can SEE the Mac, but every
+   key you press goes to BasiliskII. The KVM alone is not enough.
 
-3. **Re-image the boot media** and start fresh. See
+3. **Physically swap the boot media** to another machine and edit
+   `/etc/wpa_supplicant/` or whatever's broken, then put it back.
+
+4. **Re-image the boot media** and start fresh. See
    [Re-image from scratch](#re-image-from-scratch).
 
 ### If you can get a console shell
@@ -390,8 +417,18 @@ Common debug:
 ```sh
 ip addr show
 systemctl status ssh
+systemctl status NetworkManager
+journalctl -u NetworkManager --no-pager | tail -30
 journalctl -u ssh --no-pager | tail -30
 sudo nft list ruleset           # is something blocking inbound SSH?
+
+# Manually retry the watchdog's recovery ladder:
+sudo systemctl start chimebox-net-watchdog.service
+journalctl -t chimebox-net-watchdog -n 20
+
+# If wifi is just stuck, force a re-associate:
+nmcli connection show --active
+sudo nmcli connection up <name-from-above>
 ```
 
 The `egress-firewall` role uses output-chain filtering only,

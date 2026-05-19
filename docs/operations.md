@@ -484,6 +484,42 @@ You'll see every panic-button combo that fired and to what
 action. Useful if you suspect she stumbled into a combo
 accidentally.
 
+### I'm working on the chimebox and want a local shell on-screen
+
+If the host you're maintaining has
+`chimebox_panic_button_escape_to_tty_enabled: true` set,
+**hold `Ctrl+Alt+Shift+T` for 3 seconds** on the chimebox keyboard
+(or via the KVM's virtual keyboard) to switch the active console
+to tty2, where a normal getty login prompt is waiting. The Mac
+keeps running on tty1 — return to it with **`Ctrl+Alt+F1`**.
+
+This is the **out-of-band recovery path** for when the Pi's
+network is dead but the kiosk is still running: without it, the
+JetKVM/HDMI view shows the Mac but X grabs every keystroke,
+leaving you no way to reach a shell short of a power-cycle.
+
+The combo is opt-in (`host_vars`) precisely because it puts an
+admin login one keystroke away. Default OFF for kid-handoff
+chimeboxes; turn ON for dev/operator chimeboxes where the surface
+is acceptable.
+
+For the auto-recovery path that fixes most wifi flakes without
+operator intervention, see the `net-watchdog` role
+(enabled by default).
+
+### I want my chimebox to be more reliable on wifi (or just prefer wired)
+
+For a kid-handoff chimebox, wired Ethernet is strongly
+recommended. Wifi is fine for development and the `net-watchdog`
+role catches most transient flakes automatically, but a sustained
+wifi outage on a wifi-only chimebox leaves you operator-locked-out
+unless `escape-to-tty` is enabled. Wired ethernet sidesteps the
+whole class of failure.
+
+If wired isn't an option, leave `chimebox_net_watchdog_enabled`
+on (the default) and consider enabling `escape-to-tty` so you
+have a recovery path when watchdog can't help.
+
 ## Routine cadence I'd suggest
 
 | Cadence | Action |

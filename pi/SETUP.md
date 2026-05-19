@@ -14,6 +14,16 @@ You only need to do this once per device.
 - Wi-Fi (or wired Ethernet) configured.
 - No password authentication over SSH.
 
+> **Wired Ethernet recommended for kid-handoff chimeboxes.** Wi-Fi
+> is fine for development, but in production the kiosk takes over
+> the screen and keyboard, so if Wi-Fi drops, you have no shell to
+> debug from. The `net-watchdog` role catches most transient flakes
+> automatically, and the panic-button role's optional
+> `escape-to-tty` combo (Ctrl+Alt+Shift+T for 3s, opt-in) gives the
+> operator a local console fallback — but wired ethernet sidesteps
+> the whole class of failure. See `docs/recovery.md` for the
+> network-down recovery flow.
+
 > **Why Trixie (Debian 13), not Bookworm (Debian 12)?** Trixie has been the
 > Pi OS default since October 2025 and has full security support until
 > August 2028. Bookworm's full security support ends in June 2026. Both
