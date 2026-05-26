@@ -47,3 +47,38 @@ chimebox_audio_master_control: PCM
 # starting point for the Mac OS 8.1 startup chime, which can be
 # surprisingly loud at 100%.
 chimebox_audio_default_volume_percent: 60
+
+# Optional Mac OS 8.1 startup chime, played by the host before each
+# BasiliskII invocation. This is the "boot chime" the chimebox is
+# named for. Without it, BasiliskII does not produce a startup
+# chime — emulators fast-path past the ROM POST sequence where the
+# chime would normally play on real Mac hardware.
+#
+# Disabled by default. To enable:
+#   1. Source a Mac OS 8.1 / Quadra-era startup chime WAV file.
+#      Apple has not released these sounds under a permissive
+#      license; the chimebox repo does not ship them. Options:
+#        - Extract from a real Mac System file you legally own
+#        - Use one of the publicly archived collections that
+#          circulate alongside emulator communities (e.g., the
+#          Macintosh Garden / similar archival sites)
+#      We use a Quadra-era chime to match the Quadra 650 ROM.
+#   2. Copy the WAV onto your Ansible controller and set
+#      `chimebox_audio_startup_chime_src` to the controller-local
+#      path (in host_vars/<host>/local.yml is the right place).
+#   3. Set `chimebox_audio_startup_chime_enabled: true`.
+#
+# The chime adds ~1.4 seconds to each Mac boot (the chime plays
+# synchronously before BasiliskII opens the audio device, because
+# ALSA's exclusive-locking would otherwise clash). On in-Mac
+# Shut Down -> supervisor respawn, the chime plays again, just
+# like a real Mac power cycle.
+chimebox_audio_startup_chime_enabled: false
+
+# Controller-side absolute path to the WAV file to install as the
+# startup chime. Required when `chimebox_audio_startup_chime_enabled`
+# is true; ignored otherwise.
+#
+# The file is copied to `/usr/local/share/chimebox/startup-chime.wav`
+# on the Pi at play time (referenced by start.sh).
+chimebox_audio_startup_chime_src: ""

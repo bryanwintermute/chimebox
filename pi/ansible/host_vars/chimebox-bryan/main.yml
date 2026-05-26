@@ -22,3 +22,11 @@ chimebox_panic_button_kid_reset_enabled: true
 # without a dirty power-cycle. Ctrl+Alt+Shift+T held 3s switches
 # to tty2 (getty login); Ctrl+Alt+F1 returns to the Mac.
 chimebox_panic_button_escape_to_tty_enabled: true
+
+# Enable the Mac OS startup chime. BasiliskII doesn't produce one
+# itself (emulators fast-path past the ROM POST sequence where the
+# chime would normally play). This is host-side, played via aplay
+# before each BasiliskII invocation. The WAV source path is in
+# local.yml (gitignored, controller-specific). See
+# roles/audio/README.md for sourcing guidance.
+chimebox_audio_startup_chime_enabled: true

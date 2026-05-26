@@ -43,3 +43,43 @@
     enabled: "{{ chimebox_audio_enabled | bool }}"
     state: "{{ 'started' if chimebox_audio_enabled | bool else 'stopped' }}"
     daemon_reload: true
+
+# Startup chime: optional, opt-in. See defaults/main.yml for the
+# enable / source variables. The WAV file lives in /usr/local/share
+# (sibling-ish to the audio-init script's /usr/local/sbin location).
+- name: Ensure /usr/local/share/chimebox directory exists
+  ansible.builtin.file:
+    path: /usr/local/share/chimebox
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: chimebox_audio_startup_chime_enabled | bool
+
+- name: Validate startup chime source path is configured
+  ansible.builtin.assert:
+    that:
+      - chimebox_audio_startup_chime_src is string
+      - chimebox_audio_startup_chime_src | length > 0
+    fail_msg: |
+      `chimebox_audio_startup_chime_enabled` is true but
+      `chimebox_audio_startup_chime_src` is empty. Set the
+      controller-side path to your startup-chime WAV in
+      host_vars/<host>/local.yml. See roles/audio/README.md
+      for sourcing guidance.
+  when: chimebox_audio_startup_chime_enabled | bool
+
+- name: Install startup chime WAV
+  ansible.builtin.copy:
+    src: "{{ chimebox_audio_startup_chime_src }}"
+    dest: /usr/local/share/chimebox/startup-chime.wav
+    owner: root
+    group: root
+    mode: "0644"
+  when: chimebox_audio_startup_chime_enabled | bool
+
+- name: Remove startup chime WAV when disabled
+  ansible.builtin.file:
+    path: /usr/local/share/chimebox/startup-chime.wav
+    state: absent
+  when: not (chimebox_audio_startup_chime_enabled | bool)

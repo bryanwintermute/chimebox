@@ -39,8 +39,17 @@ Things that should land before any actual handoff to a young user.
 - [ ] **HDMI vs. analog routing**. If audio doesn't work out of the
       box, configure ALSA / PipeWire defaults to route to HDMI
       (assuming the monitor has speakers) or to a USB DAC.
-- [ ] **Default volume level**. Boot chime at 100% can be loud. Set a
-      sane default (50–70%) via Ansible.
+- [x] **Default volume level**. ✅ Boot chime at 100% can be loud.
+      Sane default (60%) set via `audio` role and applied at every
+      boot by `chimebox-audio-init`.
+- [x] **Mac OS startup chime on boot**. ✅ BasiliskII doesn't emit
+      a chime (emulators fast-path past the ROM POST sequence
+      where it would normally play). Optional `audio` role addition
+      plays a host-side WAV via `aplay` immediately before each
+      BasiliskII invocation, including in-Mac shutdown respawns.
+      Opt-in via `chimebox_audio_startup_chime_enabled`; user
+      provides the WAV (Apple-era startup sounds are not
+      permissively licensed and chimebox doesn't ship them).
 - [ ] **Hot-plug audio devices**. Today, BasiliskII picks the
       default audio sink at start. Plugging a USB speaker after the
       kiosk has launched does nothing. Decide whether to handle this

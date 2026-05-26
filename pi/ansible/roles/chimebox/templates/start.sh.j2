@@ -17,6 +17,15 @@ LOG_FILE="${LOG_DIR}/basiliskii-$(date +%Y%m%d-%H%M%S).log"
 # Disk paths -- must match the prefs file
 ROM="{{ chimebox_runtime_dir }}/{{ chimebox_rom_filename }}"
 SYSTEM_DISK="{{ chimebox_runtime_dir }}/{{ chimebox_system_disk_filename }}"
+{% if chimebox_audio_startup_chime_enabled %}
+
+# Mac OS startup chime (host-side; see roles/audio for sourcing).
+# BasiliskII doesn't emit a chime — emulators fast-path past the
+# ROM's POST sequence. We play the chime from the host immediately
+# before each BasiliskII invocation, including in-Mac shutdown
+# respawns, so the kid hears it on every "boot".
+CHIME_FILE="/usr/local/share/chimebox/startup-chime.wav"
+{% endif %}
 
 # ROM and System disk are required.
 for f in "${ROM}" "${SYSTEM_DISK}"; do
@@ -157,6 +166,15 @@ while :; do
     fi
 
     started=$(date +%s)
+{% if chimebox_audio_startup_chime_enabled %}
+    # Play the Mac startup chime before BasiliskII opens the audio
+    # device. Synchronous (~1.4s) because ALSA exclusive-locks the
+    # default device once BasiliskII opens it; trying to play
+    # concurrently fails with "Device or resource busy".
+    if [ -f "${CHIME_FILE}" ]; then
+        /usr/bin/aplay -q "${CHIME_FILE}" 2>> "${LOG_FILE}" || true
+    fi
+{% endif %}
     BasiliskII >> "${LOG_FILE}" 2>&1
     rc=$?
     runtime=$(( $(date +%s) - started ))

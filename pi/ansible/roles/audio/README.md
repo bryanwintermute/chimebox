@@ -60,6 +60,8 @@ All variables are sensible defaults; override **at least
 | `chimebox_audio_card` | `auto` | Card identifier or `auto` (prefer USB) |
 | `chimebox_audio_master_control` | `PCM` | Mixer control name for volume |
 | `chimebox_audio_default_volume_percent` | `60` | 0–100 |
+| `chimebox_audio_startup_chime_enabled` | `false` | Play a Mac startup chime before each BasiliskII boot. See [Optional: Mac OS startup chime](#optional-mac-os-startup-chime) |
+| `chimebox_audio_startup_chime_src` | `""` | Controller-side path to the WAV when chime is enabled |
 
 ### `chimebox_audio_card` values
 
@@ -187,6 +189,82 @@ for any of these — the kiosk should always come up regardless
 of audio state. The kid not hearing audio is a degraded but
 recoverable state; the kiosk being unbootable because audio
 isn't perfect is not.
+
+## Optional: Mac OS startup chime
+
+The chimebox is named for the boot chime, but **BasiliskII does
+not produce one.** Real Mac hardware plays the chime as part of
+its ROM POST sequence — emulators fast-path past that and start
+straight into Mac OS. Sound Manager works once the OS is up
+(SimCity, Sosumi, etc. all play fine), but the chime itself
+never fires.
+
+To restore the chime, the audio role can install a WAV file the
+operator provides, and `start.sh` plays it (via `aplay`)
+immediately before each BasiliskII invocation. The kid hears
+the chime on every boot, including in-Mac Shut Down → supervisor
+respawn cycles.
+
+### Why it's opt-in
+
+The chime is opt-in because the Apple-era startup chime WAVs are
+not under a permissive license, and the chimebox repo does not
+ship them. Each operator must source their own.
+
+### Sourcing the WAV
+
+Options, roughly in order of preference:
+
+1. **Extract from a Mac System file you legally own.** Open
+   `System` in ResEdit (or a modern equivalent like Rez tool /
+   ResForge) and export the `snd ` resource for "Startup chime"
+   (resource ID 1, typically). Re-encode to PCM WAV.
+2. **Use a publicly archived collection** that circulates in the
+   Mac emulator community. Search for "Apple startup sounds wav"
+   — multiple hobbyist sites have catalogued them for years.
+
+Chimebox uses a Quadra 650 ROM, so a **Macintosh Quadra startup
+chime** is the era-correct choice. Quadra chimes are mono,
+~22 kHz, 16-bit PCM, ~60 KB on disk, ~1.4 seconds long. Any WAV
+matching that profile that plays back via `aplay` on the Pi
+will work.
+
+### Configuring
+
+In `host_vars/<host>/local.yml` (gitignored — the controller-side
+path is per-machine):
+
+```yaml
+chimebox_audio_startup_chime_enabled: true
+chimebox_audio_startup_chime_src: /home/you/chimebox/StartupMacQuadra.wav
+```
+
+Re-run the playbook. The WAV gets installed to
+`/usr/local/share/chimebox/startup-chime.wav` (root-owned, 0644)
+and `start.sh` is templated to play it before each Mac boot.
+
+### Trade-offs
+
+- **Boot time:** the chime is played synchronously (~1.4s added to
+  each Mac boot) because ALSA exclusive-locks the default device
+  once BasiliskII opens it. Concurrent playback is not possible
+  without a software mixer (dmix); the chimebox-audio-init script
+  configures `pcm.!default` as a direct hardware sink, not dmix.
+- **DAC wake latency:** some cheap USB DACs (UAC-class) power
+  down between sounds and take 200-500ms to wake on first PCM
+  data, which can clip the start of the chime. If you hear a
+  noticeable "missing attack," the workaround is to inject a
+  sub-audible warm-up tone before the chime; this isn't shipped
+  today (a future enhancement).
+- **Crash-loop behavior:** if BasiliskII is in a crash-loop
+  (fast-fail backoff state), the chime still plays before each
+  attempt. Not ideal, but rare and self-evident as a symptom.
+
+### Disabling
+
+Set `chimebox_audio_startup_chime_enabled: false` and re-run the
+playbook. The role removes the installed WAV; `start.sh` is
+re-templated without the aplay block.
 
 ## Related
 
