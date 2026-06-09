@@ -1,0 +1,17 @@
+---
+# roles/wifi-tuning/handlers/main.yml
+
+- name: Reload NetworkManager
+  # `nmcli general reload` re-reads conf.d without tearing down the
+  # active connection (unlike `systemctl restart NetworkManager`),
+  # so applying tuning doesn't blip a working uplink.
+  ansible.builtin.command:
+    cmd: nmcli general reload
+  changed_when: true
+
+- name: Reapply wifi connection
+  # Only notified when the band actually changed; re-activates the
+  # profile so the new band takes effect immediately.
+  ansible.builtin.command:
+    cmd: nmcli connection up "{{ chimebox_wifi_conn_effective }}"
+  changed_when: true

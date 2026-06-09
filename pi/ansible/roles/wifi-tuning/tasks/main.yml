@@ -1,0 +1,74 @@
+---
+# roles/wifi-tuning/tasks/main.yml
+#
+# Bake in the wifi-reliability settings that keep a chimebox from
+# going network-silent (#23): disable power-save, never stop retrying
+# autoconnect, and -- optionally, per host -- lock a band where the AP
+# band-steers the Pi onto a too-weak 5GHz BSSID.
+#
+# See roles/wifi-tuning/README.md for the root-cause writeup.
+
+- name: Install chimebox wifi tuning NetworkManager drop-in
+  ansible.builtin.template:
+    src: 10-chimebox-wifi.conf.j2
+    dest: /etc/NetworkManager/conf.d/10-chimebox-wifi.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload NetworkManager
+
+- name: Remove superseded interim drop-in (if present)
+  ansible.builtin.file:
+    path: /etc/NetworkManager/conf.d/10-chimebox-net.conf
+    state: absent
+  notify: Reload NetworkManager
+
+# --- Optional per-host band lock -------------------------------------
+# Band is a per-connection property, not a global default, so it is
+# applied to the wifi connection profile directly. `nmcli con mod` is
+# surgical (it touches only the band, leaving the PSK and everything
+# else intact) and on these netplan-integration images it persists
+# into /etc/netplan.
+
+- name: Auto-detect the wifi connection name (when a band lock is requested)
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      nmcli -t -f NAME,TYPE connection show
+      | awk -F: '$2 ~ /wireless/ { print $1; exit }'
+    executable: /bin/bash
+  register: chimebox_wifi_detected_conn
+  changed_when: false
+  failed_when: false
+  when:
+    - chimebox_wifi_band | length > 0
+    - chimebox_wifi_connection | length == 0
+
+- name: Resolve effective wifi connection name
+  ansible.builtin.set_fact:
+    chimebox_wifi_conn_effective: >-
+      {{ chimebox_wifi_connection
+         if (chimebox_wifi_connection | length > 0)
+         else (chimebox_wifi_detected_conn.stdout | default('') | trim) }}
+  when: chimebox_wifi_band | length > 0
+
+- name: Read current band on the wifi connection
+  ansible.builtin.command:
+    cmd: nmcli -g 802-11-wireless.band connection show "{{ chimebox_wifi_conn_effective }}"
+  register: chimebox_wifi_current_band
+  changed_when: false
+  failed_when: false
+  when:
+    - chimebox_wifi_band | length > 0
+    - chimebox_wifi_conn_effective | default('') | length > 0
+
+- name: Lock the wifi band (per-host)
+  ansible.builtin.command:
+    cmd: >-
+      nmcli connection modify "{{ chimebox_wifi_conn_effective }}"
+      802-11-wireless.band {{ chimebox_wifi_band }}
+  when:
+    - chimebox_wifi_band | length > 0
+    - chimebox_wifi_conn_effective | default('') | length > 0
+    - (chimebox_wifi_current_band.stdout | default('') | trim) != chimebox_wifi_band
+  notify: Reapply wifi connection

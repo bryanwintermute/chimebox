@@ -130,7 +130,8 @@
 # --- Suppress getty / login banner noise --------------------------------
 # Even with a quiet kernel and Plymouth, the brief window between
 # plymouth-quit and X starting can leak getty's "<host> login: <user>"
-# and lastlog/motd output onto the screen. We empty issue and motd,
+# and lastlog/motd output onto the screen. We empty issue (and its
+# /etc/issue.d drop-ins, e.g. Raspberry Pi OS's IP.issue) and motd,
 # and demote the update-motd scripts so PAM/login has nothing to print.
 
 - name: Blank /etc/issue (no pre-login banner)
@@ -150,6 +151,27 @@
     group: root
     mode: "0644"
     backup: true
+
+- name: Find /etc/issue.d drop-in banners (e.g. Raspberry Pi OS IP.issue)
+  ansible.builtin.find:
+    paths: /etc/issue.d
+    patterns: "*.issue"
+    file_type: file
+  register: chimebox_boot_splash_issue_d
+  # /etc/issue.d may not exist on minimal images; find returns an
+  # empty list rather than failing, so no existence guard is needed.
+
+- name: Blank /etc/issue.d drop-ins (agetty concatenates these onto /etc/issue)
+  ansible.builtin.copy:
+    dest: "{{ item.path }}"
+    content: ""
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ chimebox_boot_splash_issue_d.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Blank /etc/motd (no post-login banner)
   ansible.builtin.copy:

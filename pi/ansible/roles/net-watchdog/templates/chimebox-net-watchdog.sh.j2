@@ -30,15 +30,24 @@ MAX_FAILURES="{{ chimebox_net_watchdog_max_consecutive_failures }}"
 
 CONFIGURED_TARGET="{{ chimebox_net_watchdog_target | default('') }}"
 
+# Explicit NetworkManager connection to revive during recovery.
+# Empty = auto-detect (active connection, else first wifi profile).
+UPLINK_CONFIGURED="{{ chimebox_net_watchdog_uplink_connection | default('') }}"
+
+# Treat a totally-missing default route as a failure (and recover)
+# rather than skipping the tick. A dead wifi uplink leaves no
+# gateway to ping; skipping meant it never recovered. "true"/"false".
+RECOVER_ON_NO_GATEWAY="{{ chimebox_net_watchdog_recover_on_no_gateway | default(true) | bool | lower }}"
+
 log() {
     /usr/bin/logger -t "${LOG_TAG}" -- "$*"
 }
 
 # Resolve the target IP. If the operator configured a fixed
 # target, use it; otherwise grab the current default gateway.
-# Empty result (no default route) is treated as a soft failure:
-# we log and exit 0, because there's no recovery action to take
-# when we don't even know what to ping.
+# An empty result (no default route) is handled by main() as a
+# failure condition (see RECOVER_ON_NO_GATEWAY): on a wifi chimebox
+# it almost always means the uplink died and needs recovery.
 resolve_target() {
     if [[ -n "${CONFIGURED_TARGET}" ]]; then
         echo "${CONFIGURED_TARGET}"
@@ -46,6 +55,39 @@ resolve_target() {
     fi
     /usr/sbin/ip route show default 2>/dev/null \
         | awk '/^default/ { print $3; exit }'
+}
+
+# Resolve the NM connection to revive during recovery. Prefer an
+# operator-configured name; else auto-detect. We deliberately avoid
+# relying solely on `connection show --active`: when the uplink is
+# fully down there is NO active connection, which is exactly when we
+# need to bring one up. Order: configured name, then the active
+# connection (normal flake case), then the first wifi connection
+# profile (dead-uplink case).
+resolve_uplink_connection() {
+    if [[ -n "${UPLINK_CONFIGURED}" ]]; then
+        echo "${UPLINK_CONFIGURED}"
+        return 0
+    fi
+    local active
+    active=$(/usr/bin/nmcli -t -f NAME connection show --active 2>/dev/null \
+        | grep -vx 'lo' | head -1)
+    if [[ -n "${active}" ]]; then
+        echo "${active}"
+        return 0
+    fi
+    /usr/bin/nmcli -t -f NAME,TYPE connection show 2>/dev/null \
+        | awk -F: '$2 ~ /wireless/ { print $1; exit }'
+}
+
+# Re-check connectivity after a recovery action: the gateway may
+# have only just appeared (uplink came back), so re-resolve it
+# before pinging. Returns 0 only if we now have a reachable gateway.
+recovery_succeeded() {
+    local t
+    t=$(resolve_target)
+    [[ -z "${t}" ]] && return 1
+    /usr/bin/ping -c 1 -W 5 "${t}" >/dev/null 2>&1
 }
 
 read_fail_count() {
@@ -68,28 +110,29 @@ write_fail_count() {
 # Return 0 if recovery succeeded (gateway became reachable),
 # nonzero if it didn't.
 attempt_recovery() {
-    local target="$1"
+    # The failure mode we most need to recover -- a fully dead wifi
+    # uplink -- has NO active connection, so we cannot rely on
+    # `nmcli connection show --active`. Bring up a known uplink
+    # connection by name (resolve_uplink_connection), then re-check
+    # whether a reachable gateway has appeared.
+    local uplink
+    uplink=$(resolve_uplink_connection)
 
 {% if chimebox_net_watchdog_recovery_via_nmcli | bool %}
-    # Get the currently-active NetworkManager connection name.
-    # If multiple are active (rare on a chimebox), use the first.
-    local active
-    active=$(/usr/bin/nmcli -t -f NAME connection show --active 2>/dev/null \
-        | head -1)
-    if [[ -n "${active}" ]]; then
-        log "recovery: nmcli connection up '${active}'"
-        if /usr/bin/nmcli connection up "${active}" >/dev/null 2>&1; then
+    if [[ -n "${uplink}" ]]; then
+        log "recovery: nmcli connection up '${uplink}'"
+        if /usr/bin/nmcli connection up "${uplink}" >/dev/null 2>&1; then
             sleep 3
-            if /usr/bin/ping -c 1 -W 5 "${target}" >/dev/null 2>&1; then
+            if recovery_succeeded; then
                 log "recovery: nmcli connection up succeeded; gateway reachable"
                 return 0
             fi
-            log "recovery: nmcli connection up returned 0 but gateway still unreachable"
+            log "recovery: nmcli connection up returned but gateway still unreachable"
         else
-            log "recovery: nmcli connection up FAILED"
+            log "recovery: nmcli connection up '${uplink}' FAILED"
         fi
     else
-        log "recovery: no active NetworkManager connection to restart"
+        log "recovery: no uplink connection found to bring up"
     fi
 {% endif %}
 
@@ -99,7 +142,7 @@ attempt_recovery() {
         # NetworkManager takes ~5-10s to re-associate. Give it a
         # generous window before declaring failure.
         sleep 10
-        if /usr/bin/ping -c 1 -W 5 "${target}" >/dev/null 2>&1; then
+        if recovery_succeeded; then
             log "recovery: NetworkManager restart succeeded; gateway reachable"
             return 0
         fi
@@ -115,16 +158,34 @@ attempt_recovery() {
 main() {
     local target
     target=$(resolve_target)
+
+    # Decide this tick's health. Two distinct failure modes:
+    #   (a) a default gateway exists but isn't pingable, or
+    #   (b) there's no default route at all -- which, on a wifi
+    #       chimebox, almost always means the uplink died. Older
+    #       logic skipped (b) entirely ("nothing to check"), so a
+    #       fully-dead uplink was never recovered and the box went
+    #       silent for days. We now treat (b) as a failure too.
+    local healthy reason
     if [[ -z "${target}" ]]; then
-        log "no default gateway; nothing to check this tick"
-        exit 0
+        if [[ "${RECOVER_ON_NO_GATEWAY}" != "true" ]]; then
+            log "no default gateway; recover-on-no-gateway disabled; nothing to do"
+            exit 0
+        fi
+        healthy=0
+        reason="no default gateway (uplink down?)"
+    elif /usr/bin/ping -c 1 -W 5 "${target}" >/dev/null 2>&1; then
+        healthy=1
+    else
+        healthy=0
+        reason="gateway ${target} unreachable"
     fi
 
-    if /usr/bin/ping -c 1 -W 5 "${target}" >/dev/null 2>&1; then
+    if (( healthy )); then
         local prior
         prior=$(read_fail_count)
         if (( prior > 0 )); then
-            log "gateway ${target} reachable; clearing fail count (was ${prior})"
+            log "connectivity restored; clearing fail count (was ${prior})"
         fi
         write_fail_count 0
         exit 0
@@ -134,19 +195,19 @@ main() {
     count=$(read_fail_count)
     count=$(( count + 1 ))
     write_fail_count "${count}"
-    log "gateway ${target} unreachable (consecutive failure ${count}/${MAX_FAILURES})"
+    log "${reason} (consecutive failure ${count}/${MAX_FAILURES})"
 
     if (( count < MAX_FAILURES )); then
         exit 0
     fi
 
     # At threshold: attempt recovery.
-    if attempt_recovery "${target}"; then
+    if attempt_recovery; then
         write_fail_count 0
         exit 0
     fi
 
-    log "ALL recovery steps exhausted; gateway ${target} still unreachable. Operator intervention required."
+    log "ALL recovery steps exhausted; still no connectivity. Operator intervention required."
     # Reset the counter so we don't keep retrying recovery every
     # tick when it isn't working. The next tick that sees a
     # MAX-failure run will try recovery again.

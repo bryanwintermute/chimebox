@@ -33,3 +33,18 @@ chimebox_net_watchdog_target: ""
 # situation warrants escalation).
 chimebox_net_watchdog_recovery_via_nmcli: true
 chimebox_net_watchdog_recovery_via_restart: true
+
+# Treat a totally-missing default route as a failure and run the
+# recovery ladder. This is the most important silent-failure mode on
+# a wifi chimebox: when the uplink dies completely there is no
+# gateway to ping, so older logic that skipped "no default gateway"
+# ticks never recovered and the box went silent for days. Set to
+# false only for hosts that are intentionally offline.
+chimebox_net_watchdog_recover_on_no_gateway: true
+
+# NetworkManager connection name to bring up during recovery.
+# Empty = auto-detect: the active connection if any, else the first
+# wifi connection profile (so recovery works even when the uplink is
+# fully down and nothing is active). Set explicitly if auto-detect
+# would pick the wrong one, e.g. "netplan-wlan0-<SSID>".
+chimebox_net_watchdog_uplink_connection: ""

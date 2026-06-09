@@ -33,11 +33,19 @@ see the panic-button role's optional `escape-to-tty` combo
 
 ## Recovery ladder
 
-1. **Increment counter** on each failed gateway ping.
-2. **Reset counter** on a successful ping.
+1. **Increment counter** on each failed check. A check fails when
+   the gateway is unreachable **or** there is no default route at
+   all — the latter is the critical case: a dead wifi uplink leaves
+   no gateway to ping, and older logic skipped those ticks and never
+   recovered (toggle via `chimebox_net_watchdog_recover_on_no_gateway`).
+2. **Reset counter** on a successful check.
 3. **At threshold** (`max_consecutive_failures`):
-   1. `nmcli connection up <active>` — usually fixes "DHCP lease
-      expired and renewal silently failed."
+   1. `nmcli connection up <uplink>` — brings the uplink back. The
+      uplink is resolved by name (operator-configured, else the
+      active connection, else the first wifi profile) so it works
+      even when the uplink is fully down and **no** connection is
+      active. Usually fixes "DHCP lease expired / association
+      dropped and never recovered."
    2. `systemctl restart NetworkManager.service` — handles wifi
       driver hiccups, kernel-side queue jams.
 4. **If both fail**: log loudly via `logger -t`, reset counter so
@@ -107,9 +115,13 @@ isn't a panacea, only fixes recoverable failure modes.)
 - Doesn't recover from **physical-layer** failures: cable yanked,
   router off, AP rebooted. Same `journalctl` entries surface those
   but no automated fix is possible.
-- Doesn't recover from **AP-side** auth failures (e.g., MAC ACL,
-  WPA password rotation). NetworkManager would itself need to
-  re-prompt for credentials.
+- Recovers a **fully-dead uplink** (no default route) by bringing
+  the uplink connection back up by name — including the case where
+  NetworkManager gave up after a handshake flap and parked the
+  connection (`failed (no-secrets)`); `nmcli connection up`
+  re-activates it using the stored PSK.
+- Still can't fix an **actually-changed** WPA password or MAC ACL
+  (the stored PSK is genuinely wrong) — that needs operator action.
 - Doesn't reboot. By design.
 
 For the network-down operator-recovery escape hatch when the

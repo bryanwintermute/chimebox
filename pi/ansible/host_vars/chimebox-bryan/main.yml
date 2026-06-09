@@ -30,3 +30,9 @@ chimebox_panic_button_escape_to_tty_enabled: true
 # local.yml (gitignored, controller-specific). See
 # roles/audio/README.md for sourcing guidance.
 chimebox_audio_startup_chime_enabled: true
+
+# This location's AP band-steers the Pi onto a 5GHz BSSID that's too
+# weak from here, causing the wifi to thrash and eventually go silent
+# (#23). Lock 2.4GHz, which is strong and stable from this spot. This
+# is host-specific tuning -- do NOT copy it to units in other rooms.
+chimebox_wifi_band: bg

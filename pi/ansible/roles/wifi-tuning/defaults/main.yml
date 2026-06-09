@@ -1,0 +1,35 @@
+---
+# roles/wifi-tuning/defaults/main.yml
+
+# Master switch. Default ON: every chimebox benefits from disabling
+# wifi power-save and never giving up on auto-reconnect. The settings
+# below are what keep a chimebox from going network-silent (#23).
+chimebox_wifi_tuning_enabled: true
+
+# Wifi power-save. The brcmfmac default (power-save ON) drops beacons
+# and produces LOW_ACK disconnects on a kiosk that mostly idles -- a
+# primary driver of "the Pi goes silent." NetworkManager values:
+#   0 = use global default   1 = leave driver alone
+#   2 = disable              3 = enable
+# 2 (disable) is the right answer for an always-on kiosk uplink.
+chimebox_wifi_powersave: 2
+
+# How many times NetworkManager retries autoconnect before parking
+# the connection. The stock default (-1 => 4) means a sustained flap
+# exhausts the retries and the uplink stays down until reboot --
+# exactly the "silent for days" failure mode. 0 = retry forever.
+chimebox_wifi_autoconnect_retries: 0
+
+# Optional per-host band lock, for sites where the AP band-steers the
+# Pi onto a too-weak 5GHz BSSID (repeated assoc-reject -> flap). This
+# is the *nmcli* band token, not the netplan spelling:
+#   "" = let the driver/AP choose (correct default for most sites)
+#   "bg" = lock 2.4GHz
+#   "a"  = lock 5GHz
+# Set in host_vars for a specific problem location only.
+chimebox_wifi_band: ""
+
+# NetworkManager connection the band lock applies to. "" = auto-detect
+# the first wifi connection profile. Set explicitly only if a host has
+# more than one wifi profile.
+chimebox_wifi_connection: ""

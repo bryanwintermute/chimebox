@@ -65,6 +65,9 @@
     - role: net-watchdog
       tags: [net-watchdog, recovery, networking]
       when: chimebox_net_watchdog_enabled | default(true) | bool
+    - role: wifi-tuning
+      tags: [wifi-tuning, networking]
+      when: chimebox_wifi_tuning_enabled | default(true) | bool
 
   post_tasks:
     - name: Print next steps

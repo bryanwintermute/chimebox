@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+# /etc/NetworkManager/conf.d/10-chimebox-wifi.conf
+#
+# Chimebox wifi reliability tuning -- see roles/wifi-tuning/README.md.
+#
+# These are global NetworkManager connection *defaults*. They live in
+# conf.d rather than the per-connection profile on purpose: on these
+# images the wifi profile is rendered from netplan, so editing the
+# profile is fiddly and per-host. conf.d is read directly by
+# NetworkManager, applies to every connection, and is netplan-proof.
+[connection]
+# 2 = disable wifi power-save (kiosk reliability; avoids LOW_ACK flaps).
+wifi.powersave={{ chimebox_wifi_powersave }}
+# 0 = retry autoconnect forever; never park a headless uplink.
+connection.autoconnect-retries={{ chimebox_wifi_autoconnect_retries }}
