@@ -36,3 +36,8 @@ chimebox_audio_startup_chime_enabled: true
 # (#23). Lock 2.4GHz, which is strong and stable from this spot. This
 # is host-specific tuning -- do NOT copy it to units in other rooms.
 chimebox_wifi_band: bg
+
+# Remote wifi-only box: enable the last-resort rfkill cycle in the
+# net-watchdog recovery ladder. Cheap insurance for a wedged radio
+# when no one is on-site to power-cycle. Safe (rfkill ioctl only).
+chimebox_net_watchdog_aggressive_recovery: true

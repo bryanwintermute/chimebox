@@ -39,6 +39,10 @@ UPLINK_CONFIGURED="{{ chimebox_net_watchdog_uplink_connection | default('') }}"
 # gateway to ping; skipping meant it never recovered. "true"/"false".
 RECOVER_ON_NO_GATEWAY="{{ chimebox_net_watchdog_recover_on_no_gateway | default(true) | bool | lower }}"
 
+# Path to the rfkill binary, used only by the optional aggressive
+# recovery step (see chimebox_net_watchdog_aggressive_recovery).
+RFKILL_BIN="{{ chimebox_net_watchdog_rfkill_bin | default('/usr/sbin/rfkill') }}"
+
 log() {
     /usr/bin/logger -t "${LOG_TAG}" -- "$*"
 }
@@ -149,6 +153,33 @@ attempt_recovery() {
         log "recovery: NetworkManager restart completed but gateway still unreachable"
     else
         log "recovery: systemctl restart NetworkManager FAILED"
+    fi
+{% endif %}
+
+{% if chimebox_net_watchdog_aggressive_recovery | bool %}
+    # Last resort: cycle the radio with rfkill. The gentler steps talk
+    # *through* NetworkManager; if the radio's soft-block / RF state is
+    # wedged below NM, a block/unblock can clear it where NM cannot.
+    # This runs only when the steps above failed, and never reboots.
+    if [[ -x "${RFKILL_BIN}" ]]; then
+        log "recovery: rfkill cycle (block + unblock wifi) to reset radio state"
+        "${RFKILL_BIN}" block wifi >/dev/null 2>&1
+        sleep 2
+        "${RFKILL_BIN}" unblock wifi >/dev/null 2>&1
+        # Give the radio a moment to re-enable, then nudge the uplink
+        # back up (NM autoconnect usually does this, but be explicit).
+        sleep 3
+        if [[ -n "${uplink}" ]]; then
+            /usr/bin/nmcli connection up "${uplink}" >/dev/null 2>&1
+        fi
+        sleep 5
+        if recovery_succeeded; then
+            log "recovery: rfkill cycle succeeded; gateway reachable"
+            return 0
+        fi
+        log "recovery: rfkill cycle completed but gateway still unreachable"
+    else
+        log "recovery: aggressive recovery enabled but rfkill not executable at ${RFKILL_BIN}; skipping"
     fi
 {% endif %}
 

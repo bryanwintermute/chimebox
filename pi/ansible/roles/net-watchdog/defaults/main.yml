@@ -34,6 +34,20 @@ chimebox_net_watchdog_target: ""
 chimebox_net_watchdog_recovery_via_nmcli: true
 chimebox_net_watchdog_recovery_via_restart: true
 
+# Optional aggressive last-resort recovery. When the gentle ladder
+# above (nmcli connection up, NetworkManager restart) fails to restore
+# connectivity, cycle the wifi radio with rfkill (block then unblock)
+# to clear a stuck soft-block / RF state *below* NetworkManager, then
+# nudge the uplink back up. Off by default: the gentle ladder recovers
+# every failure observed so far (see #23); this is insurance for a
+# genuinely wedged radio on a remote wifi box. Never reboots.
+# Requires the 'rfkill' package (present on Raspberry Pi OS). Uses
+# only the rfkill ioctl, so no service-sandbox relaxation is needed.
+chimebox_net_watchdog_aggressive_recovery: false
+
+# Path to the rfkill binary (only used when aggressive recovery is on).
+chimebox_net_watchdog_rfkill_bin: /usr/sbin/rfkill
+
 # Treat a totally-missing default route as a failure and run the
 # recovery ladder. This is the most important silent-failure mode on
 # a wifi chimebox: when the uplink dies completely there is no

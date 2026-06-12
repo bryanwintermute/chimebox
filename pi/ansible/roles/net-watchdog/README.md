@@ -48,12 +48,18 @@ see the panic-button role's optional `escape-to-tty` combo
       dropped and never recovered."
    2. `systemctl restart NetworkManager.service` — handles wifi
       driver hiccups, kernel-side queue jams.
-4. **If both fail**: log loudly via `logger -t`, reset counter so
-   we don't keep retrying every 60s on a stuck failure mode.
+   3. *(opt-in)* **rfkill cycle** — `rfkill block wifi` then
+      `unblock`, then nudge the uplink up. Steps 1–2 talk *through*
+      NetworkManager; this resets the radio's soft-block / RF state
+      *below* NM, for a genuinely wedged radio. Off by default
+      (`chimebox_net_watchdog_aggressive_recovery`); uses only the
+      rfkill ioctl, so no service-sandbox relaxation is needed.
+4. **If all enabled steps fail**: log loudly via `logger -t`, reset
+   counter so we don't keep retrying every 60s on a stuck failure mode.
 
-The watchdog **never reboots the Pi**. If neither recovery step
-works, the operator is presumed to want to debug rather than
-have an unattended reboot loop muddying journal evidence.
+The watchdog **never reboots the Pi**. If recovery fails, the
+operator is presumed to want to debug rather than have an unattended
+reboot loop muddying journal evidence.
 
 ## Tuning
 
@@ -65,9 +71,19 @@ chimebox_net_watchdog_max_consecutive_failures: 3
 chimebox_net_watchdog_target: ""   # "" = use current default gateway
 chimebox_net_watchdog_recovery_via_nmcli: true
 chimebox_net_watchdog_recovery_via_restart: true
+chimebox_net_watchdog_aggressive_recovery: false  # opt-in rfkill cycle
+chimebox_net_watchdog_rfkill_bin: /usr/sbin/rfkill
 ```
 
-To disable on a specific host:
+To enable the last-resort rfkill cycle on a remote wifi box (cheap
+insurance for a wedged radio; requires the `rfkill` package):
+
+```yaml
+# host_vars/<hostname>/main.yml
+chimebox_net_watchdog_aggressive_recovery: true
+```
+
+To disable the watchdog entirely on a specific host:
 
 ```yaml
 # host_vars/<hostname>.yml
@@ -120,6 +136,11 @@ isn't a panacea, only fixes recoverable failure modes.)
   NetworkManager gave up after a handshake flap and parked the
   connection (`failed (no-secrets)`); `nmcli connection up`
   re-activates it using the stored PSK.
+- For a radio wedged *below* NetworkManager, the opt-in rfkill cycle
+  (`chimebox_net_watchdog_aggressive_recovery`) can clear a stuck
+  soft-block where NM-level steps can't. It is **not** a driver
+  reload (that needs relaxing the service sandbox and is riskier on
+  the Pi 5 SDIO wifi — deliberately out of scope here).
 - Still can't fix an **actually-changed** WPA password or MAC ACL
   (the stored PSK is genuinely wrong) — that needs operator action.
 - Doesn't reboot. By design.
