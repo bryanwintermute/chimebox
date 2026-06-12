@@ -520,6 +520,32 @@ If wired isn't an option, leave `chimebox_net_watchdog_enabled`
 on (the default) and consider enabling `escape-to-tty` so you
 have a recovery path when watchdog can't help.
 
+### Is my power supply actually adequate?
+
+The Pi 5 is fussy about power: a marginal or non-PD-aware supply
+(or a multi-port charger whose other ports steal current) causes
+brief under-voltage dips that destabilise wifi and, in the worst
+case, corrupt a disk write. Use the **official 27W USB-C PD
+supply** for any kid-handoff chimebox.
+
+The `pmic-watchdog` role (enabled by default) makes this
+observable: it logs under-voltage / throttling events and 5V-rail
+dips to the journal, with timestamps, so you can tell whether a
+supply is healthy instead of guessing.
+
+```sh
+# A snapshot right now:
+vcgencmd get_throttled          # 0x0 == perfect; bit 16/18 set == UV/throttle has occurred
+vcgencmd pmic_read_adc EXT5V_V  # the input rail; should sit comfortably above ~4.9V
+
+# What the watchdog has seen (persists across reboots, per the journal role):
+journalctl -t chimebox-pmic-watchdog --since '1 day ago'
+```
+
+To validate a supply swap: run on the suspect supply for a day,
+note any under-voltage lines, swap to the candidate, and confirm
+the warnings stop and every hourly heartbeat reads `clean`.
+
 ## Routine cadence I'd suggest
 
 | Cadence | Action |

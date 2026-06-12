@@ -1,0 +1,48 @@
+---
+# roles/pmic-watchdog/tasks/main.yml
+#
+# Install a PMIC observability timer: samples `vcgencmd get_throttled`
+# and a PMIC voltage rail every N seconds and logs under-voltage /
+# throttling transitions to the journal via `logger -t`. Edge-driven
+# (logs on change, not every tick) plus an hourly heartbeat.
+#
+# See roles/pmic-watchdog/README.md for the bitfield decoder and the
+# rationale (chimebox issue #21).
+
+- name: Install chimebox-pmic-watchdog script
+  ansible.builtin.template:
+    src: chimebox-pmic-watchdog.sh.j2
+    dest: /usr/local/sbin/chimebox-pmic-watchdog
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart chimebox-pmic-watchdog.timer
+
+- name: Install chimebox-pmic-watchdog.service
+  ansible.builtin.template:
+    src: chimebox-pmic-watchdog.service.j2
+    dest: /etc/systemd/system/chimebox-pmic-watchdog.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart chimebox-pmic-watchdog.timer
+
+- name: Install chimebox-pmic-watchdog.timer
+  ansible.builtin.template:
+    src: chimebox-pmic-watchdog.timer.j2
+    dest: /etc/systemd/system/chimebox-pmic-watchdog.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart chimebox-pmic-watchdog.timer
+
+- name: Enable + start chimebox-pmic-watchdog.timer
+  ansible.builtin.systemd:
+    name: chimebox-pmic-watchdog.timer
+    enabled: true
+    state: started
+    daemon_reload: true

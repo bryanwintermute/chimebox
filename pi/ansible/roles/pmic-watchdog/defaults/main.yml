@@ -1,0 +1,30 @@
+---
+# roles/pmic-watchdog/defaults/main.yml
+
+# Master switch. Default ON: the Pi 5 PMIC exposes under-voltage and
+# throttling signals that are otherwise invisible until the next
+# reboot wipes them. Logging them proactively is cheap insurance and
+# the only way to correlate power events with symptoms after the fact.
+chimebox_pmic_watchdog_enabled: true
+
+# How often to sample (seconds). 60s matches net-watchdog and is
+# frequent enough to catch sustained dips; the sticky "since boot"
+# throttled bits mean we never miss the *fact* a brief event occurred
+# even if we don't sample the exact instant.
+chimebox_pmic_watchdog_interval_seconds: 60
+
+# Heartbeat cadence (seconds). Once per this interval the watchdog
+# logs current state even when everything is clean, so an empty
+# journal search is distinguishable from "the watchdog wasn't running."
+# 3600 = hourly.
+chimebox_pmic_watchdog_heartbeat_seconds: 3600
+
+# PMIC ADC rail to monitor for early-warning voltage dips. EXT5V_V is
+# the Pi 5's external 5V input rail (what the USB-C supply delivers);
+# watching it catches a sagging/brownouts before they trip throttling.
+chimebox_pmic_watchdog_volt_rail: EXT5V_V
+
+# Log a warning when the monitored rail dips below this many volts.
+# The Pi 5 flags under-voltage around ~4.8V; 4.85 is an early-warning
+# threshold that fires just before the hardware does.
+chimebox_pmic_watchdog_volt_warn_below: 4.85

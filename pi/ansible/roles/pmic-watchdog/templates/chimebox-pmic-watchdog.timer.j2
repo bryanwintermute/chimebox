@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Periodically run chimebox-pmic-watchdog
+
+[Timer]
+# Start soon after boot. We sample early to catch a cold-boot
+# under-voltage; even if we miss the exact instant, the sticky
+# "since boot" throttled bits let the first tick log that it happened.
+OnBootSec=30s
+OnUnitActiveSec={{ chimebox_pmic_watchdog_interval_seconds }}s
+# Randomize slightly so multiple chimeboxes don't sample in lockstep.
+RandomizedDelaySec=5s
+Unit=chimebox-pmic-watchdog.service
+
+[Install]
+WantedBy=timers.target

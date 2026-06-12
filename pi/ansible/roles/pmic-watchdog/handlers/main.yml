@@ -1,0 +1,11 @@
+---
+# roles/pmic-watchdog/handlers/main.yml
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart chimebox-pmic-watchdog.timer
+  ansible.builtin.systemd:
+    name: chimebox-pmic-watchdog.timer
+    state: restarted

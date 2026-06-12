@@ -429,7 +429,18 @@ journalctl -t chimebox-net-watchdog -n 20
 # If wifi is just stuck, force a re-associate:
 nmcli connection show --active
 sudo nmcli connection up <name-from-above>
+
+# Was this a POWER event? (under-voltage destabilises wifi)
+vcgencmd get_throttled                       # 0x0 == clean
+journalctl -t chimebox-pmic-watchdog --since '1 day ago'
 ```
+
+If `chimebox-pmic-watchdog` shows under-voltage or `EXT5V_V` dips
+around the time connectivity died, suspect the power supply (a
+marginal or non-PD-aware adapter, or a multi-port charger sharing
+current) before chasing the network stack. Swap to the official
+Pi 5 27W PSU. See *Is my power supply actually adequate?* in
+[operations.md](operations.md).
 
 The `egress-firewall` role uses output-chain filtering only,
 so it never blocks inbound SSH. If `nft list ruleset` shows

@@ -1,0 +1,190 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-pmic-watchdog
+#
+# PMIC observability for the Pi 5. Run periodically by
+# chimebox-pmic-watchdog.timer.
+#
+# The Pi exposes `vcgencmd get_throttled` -- a bitfield of current and
+# historical under-voltage / freq-cap / throttle / soft-temp events --
+# and per-rail voltages via `vcgencmd pmic_read_adc`. None of this is
+# visible to an operator after the fact: the "since boot" flags are
+# wiped on the next reboot. This watchdog logs the signals to the
+# (persistent, see #20) journal so power events can be correlated with
+# symptoms like "the Pi went silent."
+#
+# Behaviour (edge-driven, to avoid spamming the journal every tick):
+#   * "since boot" flags (bits 16-19): logged ONCE each, the first
+#     tick they're observed set.
+#   * "now" flags (bits 0-3): logged when the active set changes
+#     (rising edge logs what's active; falling edge logs "cleared").
+#   * monitored voltage rail: logged when it first dips below the warn
+#     threshold, and again when it recovers.
+#   * heartbeat: current state logged once per heartbeat interval even
+#     when clean, so an empty search != "watchdog wasn't running."
+#
+# State lives in /run (tmpfs) so it resets cleanly on every boot.
+#
+# throttled bitfield decoder:
+#   0x00001 under-voltage detected (now)
+#   0x00002 arm frequency capped (now)
+#   0x00004 currently throttled (now)
+#   0x00008 soft temperature limit active (now)
+#   0x10000 under-voltage has occurred (since boot)
+#   0x20000 arm frequency capping has occurred (since boot)
+#   0x40000 throttling has occurred (since boot)
+#   0x80000 soft temperature limit has occurred (since boot)
+
+set -u
+
+LOG_TAG="chimebox-pmic-watchdog"
+STATE_FILE="/run/chimebox-pmic-watchdog.state"
+VCGENCMD="/usr/bin/vcgencmd"
+
+VOLT_RAIL="{{ chimebox_pmic_watchdog_volt_rail }}"
+VOLT_WARN_BELOW="{{ chimebox_pmic_watchdog_volt_warn_below }}"
+HEARTBEAT_SECONDS="{{ chimebox_pmic_watchdog_heartbeat_seconds }}"
+
+# Bit masks (bash arithmetic understands the 0x prefix).
+readonly M_UV_NOW=0x1
+readonly M_FREQ_NOW=0x2
+readonly M_THROTTLE_NOW=0x4
+readonly M_TEMP_NOW=0x8
+readonly M_UV_BOOT=0x10000
+readonly M_FREQ_BOOT=0x20000
+readonly M_THROTTLE_BOOT=0x40000
+readonly M_TEMP_BOOT=0x80000
+readonly MASK_NOW=0xF
+readonly MASK_BOOT=0xF0000
+
+log() {
+    /usr/bin/logger -t "${LOG_TAG}" -- "$*"
+}
+
+# Decode the "now" nibble of a value into a human string.
+decode_now() {
+    local v="$1" out=""
+    (( v & M_UV_NOW ))       && out+="under-voltage "
+    (( v & M_FREQ_NOW ))     && out+="arm-freq-capped "
+    (( v & M_THROTTLE_NOW )) && out+="throttled "
+    (( v & M_TEMP_NOW ))     && out+="soft-temp-limit "
+    echo "${out% }"
+}
+
+# Decode the "since boot" bits of a value into a human string.
+decode_boot() {
+    local v="$1" out=""
+    (( v & M_UV_BOOT ))       && out+="under-voltage "
+    (( v & M_FREQ_BOOT ))     && out+="arm-freq-capping "
+    (( v & M_THROTTLE_BOOT )) && out+="throttling "
+    (( v & M_TEMP_BOOT ))     && out+="soft-temp-limit "
+    echo "${out% }"
+}
+
+# Read EXT5V_V (or configured rail). Output: bare volts, e.g. 5.077.
+# Empty string if the read fails or doesn't parse.
+read_voltage() {
+    local line v
+    line=$(${VCGENCMD} pmic_read_adc "${VOLT_RAIL}" 2>/dev/null) || return 0
+    # line looks like: "     EXT5V_V volt(24)=5.07726000V"
+    v=${line##*=}
+    v=${v%V}
+    [[ "${v}" =~ ^[0-9]+(\.[0-9]+)?$ ]] && echo "${v}"
+}
+
+# Float "a < b" via awk. Returns 0 (true) if a < b.
+flt_lt() {
+    /usr/bin/awk -v a="$1" -v b="$2" 'BEGIN { exit !(a + 0 < b + 0) }'
+}
+
+# --- load prior state -------------------------------------------------
+LOGGED_BOOT_BITS=0   # decimal mask of since-boot bits already logged
+LAST_NOW=0           # decimal "now" nibble at last tick
+VOLT_LOW=0           # 1 if rail was below threshold at last tick
+LAST_HEARTBEAT=0     # epoch of last heartbeat
+
+if [[ -r "${STATE_FILE}" ]]; then
+    while IFS='=' read -r k v; do
+        case "${k}" in
+            LOGGED_BOOT_BITS) [[ "${v}" =~ ^[0-9]+$ ]] && LOGGED_BOOT_BITS="${v}" ;;
+            LAST_NOW)         [[ "${v}" =~ ^[0-9]+$ ]] && LAST_NOW="${v}" ;;
+            VOLT_LOW)         [[ "${v}" =~ ^[01]$  ]] && VOLT_LOW="${v}" ;;
+            LAST_HEARTBEAT)   [[ "${v}" =~ ^[0-9]+$ ]] && LAST_HEARTBEAT="${v}" ;;
+        esac
+    done < "${STATE_FILE}"
+fi
+
+# --- sample -----------------------------------------------------------
+raw=$(${VCGENCMD} get_throttled 2>/dev/null)
+val=${raw#*=}
+if [[ ! "${val}" =~ ^0x[0-9a-fA-F]+$ ]]; then
+    log "WARN: could not read get_throttled (got: '${raw}'); is vcgencmd available?"
+    exit 0
+fi
+
+now_bits=$(( val & MASK_NOW ))
+boot_bits=$(( val & MASK_BOOT ))
+volt=$(read_voltage)
+temp_raw=$(${VCGENCMD} measure_temp 2>/dev/null)
+temp=${temp_raw#temp=}
+now_epoch=$(date +%s)
+
+# Reusable context suffix for log lines.
+ctx="throttled=${val}"
+[[ -n "${volt}" ]] && ctx+=", ${VOLT_RAIL}=${volt}V"
+[[ -n "${temp}" ]] && ctx+=", temp=${temp}"
+
+# --- 1. since-boot flags: log each once -------------------------------
+newly=$(( boot_bits & ~LOGGED_BOOT_BITS ))
+if (( newly != 0 )); then
+    log "since-boot flag set: $(decode_boot "${newly}") (${ctx})"
+    LOGGED_BOOT_BITS=$(( LOGGED_BOOT_BITS | boot_bits ))
+fi
+
+# --- 2. "now" flags: log on change ------------------------------------
+if (( now_bits != LAST_NOW )); then
+    if (( now_bits != 0 )); then
+        log "ACTIVE now: $(decode_now "${now_bits}") (${ctx})"
+    else
+        log "active condition cleared (${ctx})"
+    fi
+    LAST_NOW="${now_bits}"
+fi
+
+# --- 3. voltage early-warning: log on threshold crossing --------------
+if [[ -n "${volt}" ]]; then
+    if flt_lt "${volt}" "${VOLT_WARN_BELOW}"; then
+        if (( VOLT_LOW == 0 )); then
+            log "WARN: ${VOLT_RAIL} dipped to ${volt}V (below ${VOLT_WARN_BELOW}V early-warning threshold) (${ctx})"
+            VOLT_LOW=1
+        fi
+    else
+        if (( VOLT_LOW == 1 )); then
+            log "${VOLT_RAIL} recovered to ${volt}V (${ctx})"
+            VOLT_LOW=0
+        fi
+    fi
+fi
+
+# --- 4. heartbeat -----------------------------------------------------
+if (( now_epoch - LAST_HEARTBEAT >= HEARTBEAT_SECONDS )); then
+    summary="clean"
+    if (( val != 0 )); then
+        summary=""
+        (( now_bits != 0 ))  && summary+="now[$(decode_now "${now_bits}")] "
+        (( boot_bits != 0 )) && summary+="since-boot[$(decode_boot "${boot_bits}")]"
+        summary=${summary% }
+    fi
+    log "heartbeat: ${summary} (${ctx})"
+    LAST_HEARTBEAT="${now_epoch}"
+fi
+
+# --- persist state ----------------------------------------------------
+{
+    echo "LOGGED_BOOT_BITS=${LOGGED_BOOT_BITS}"
+    echo "LAST_NOW=${LAST_NOW}"
+    echo "VOLT_LOW=${VOLT_LOW}"
+    echo "LAST_HEARTBEAT=${LAST_HEARTBEAT}"
+} > "${STATE_FILE}"
+
+exit 0

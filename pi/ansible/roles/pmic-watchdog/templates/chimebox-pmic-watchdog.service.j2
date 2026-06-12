@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+[Unit]
+Description=chimebox PMIC watchdog (log under-voltage + throttling events)
+# Don't run during system shutdown.
+ConditionPathExists=!/run/systemd/shutdown/scheduled
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/chimebox-pmic-watchdog
+# Runs as root for unrestricted access to the VideoCore mailbox
+# (/dev/vcio) that vcgencmd uses. Otherwise this is a tiny read-only
+# probe, so keep the surface minimal. NB: we deliberately do NOT set
+# PrivateDevices=true -- that would hide /dev/vcio and break vcgencmd.
+NoNewPrivileges=true
+ProtectSystem=strict
+# We need to write /run/chimebox-pmic-watchdog.state.
+ReadWritePaths=/run
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# Logging goes to syslog (logger -t) and journal.
+StandardOutput=journal
+StandardError=journal

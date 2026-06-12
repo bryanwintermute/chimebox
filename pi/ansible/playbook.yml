@@ -68,6 +68,9 @@
     - role: wifi-tuning
       tags: [wifi-tuning, networking]
       when: chimebox_wifi_tuning_enabled | default(true) | bool
+    - role: pmic-watchdog
+      tags: [pmic-watchdog, observability]
+      when: chimebox_pmic_watchdog_enabled | default(true) | bool
 
   post_tasks:
     - name: Print next steps
