@@ -25,7 +25,11 @@ re-baselineable:
   a workstation) captures the current `System.dsk` as the new
   factory baseline. The file is written read-only (`0440`) so
   accidental overwrites are blocked. Re-blessing replaces the
-  prior baseline.
+  prior baseline. It **also** captures a matching `manual-*`
+  rotating snapshot of the same image, so that `chimebox-reset
+  latest` (and the `Ctrl+Alt+Shift+Z` kid-reset hotkey) resolve to
+  the just-blessed state rather than a pre-bless snapshot (#1).
+  Older rotating snapshots are left in place as legitimate history.
 - `chimebox-reset factory` (or `scripts/factory-reset.sh`)
   restores `System.dsk` from this baseline.
 

@@ -95,6 +95,13 @@ properties are deliberate: the factory baseline must survive
 the cycle of rotating snapshots that may have captured the
 problem you're trying to undo.
 
+Blessing also drops a matching `manual-*` snapshot into the
+rotating dir (byte-identical to the new baseline), so that
+`kid-reset latest` and the `Ctrl+Alt+Shift+Z` hotkey immediately
+after a bless resolve to the just-blessed state instead of rolling
+back to a pre-bless snapshot. Older snapshots are preserved as
+history; prune them by hand if you want a cleaner slate.
+
 ### 2. Kiosk keyboard hotkey (panic-button daemon) — adult shoulder-surfing the kid
 
 The `panic-button` Ansible role installs a kernel-input-layer

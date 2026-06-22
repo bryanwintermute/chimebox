@@ -46,6 +46,25 @@ if [ "${KIND}" = "factory" ]; then
     chmod 0440 "${FACTORY_DISK}"
     log "blessed ${FACTORY_DISK} as factory baseline ($(stat -c %s "${FACTORY_DISK}") bytes)"
     log "  read-only; re-bless with 'chimebox-snapshot factory' to update"
+
+    # Also capture a matching rotating snapshot from the same System.dsk.
+    # Without this, 'chimebox-reset latest' (and the Ctrl+Alt+Shift+Z
+    # kid-reset hotkey, which both resolve "latest" as the newest file in
+    # the rotating snapshots dir) would still point at a PRE-bless
+    # snapshot. A post-bless "reset latest" would then roll back past the
+    # new baseline and silently discard the just-blessed curation (#1).
+    # Re-invoking ourselves as 'manual' reuses the exact rotating-snapshot
+    # path (same self-call pattern as the daily->weekly chain below) and
+    # snapshots the same, still-static System.dsk, so the new manual
+    # snapshot is byte-identical to the factory baseline and sorts newest.
+    # Best-effort: the bless already succeeded, so a failure here warns
+    # loudly rather than failing the whole operation.
+    if "$0" manual; then
+        log "factory: captured a matching 'manual' snapshot so 'reset latest' resolves to the new baseline"
+    else
+        log "factory: WARNING blessed factory.dsk but FAILED to capture the matching rotating snapshot"
+        log "factory:   run 'chimebox-snapshot manual' now, or 'chimebox-reset latest' may roll back past this bless (#1)"
+    fi
     exit 0
 fi
 
