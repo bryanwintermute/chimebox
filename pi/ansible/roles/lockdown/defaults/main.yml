@@ -1,0 +1,19 @@
+---
+# roles/lockdown/defaults/main.yml
+
+# Host-level Ctrl+Alt+Del behavior on the kiosk.
+#
+#   mask   - (default) ignore it entirely. A single press does nothing
+#            AND the systemd 7-presses-in-2s burst-reboot is disabled,
+#            so a kid mashing the combo can't reboot either. This is the
+#            most kid-proof choice and closes the undocumented reboot /
+#            boot-window escape path (#19).
+#   reboot - restore systemd's stock behavior (Ctrl+Alt+Del reboots the
+#            Pi). Reasonable on a dev/operator box, where a reboot key is
+#            handy and there's no kid with physical keyboard access.
+#
+# Reserved for a future value: 'polite-shutdown' (remap Ctrl+Alt+Del to
+# the polite-shutdown primitive so a kid press shuts the Mac down
+# cleanly rather than no-op) -- pending the Pi-side polite-shutdown
+# primitive tracked in #18.
+chimebox_lockdown_ctrl_alt_del: mask

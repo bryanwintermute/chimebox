@@ -1,0 +1,14 @@
+---
+# roles/lockdown/handlers/main.yml
+
+- name: Reexec systemd manager
+  # CtrlAltDelBurstAction lives in system.conf (a *manager* setting),
+  # which PID 1 only re-reads on daemon-reexec -- a plain daemon-reload
+  # does NOT pick it up. daemon-reexec re-executes systemd in place; it
+  # does not stop or restart services and is safe on the running kiosk
+  # (it's the same operation a systemd package upgrade performs). The
+  # masking of ctrl-alt-del.target applies immediately regardless; this
+  # handler is only needed so the burst-action change applies without a
+  # reboot (it would otherwise apply on next boot).
+  ansible.builtin.systemd:
+    daemon_reexec: true

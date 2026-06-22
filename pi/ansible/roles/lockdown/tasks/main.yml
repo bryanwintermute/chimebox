@@ -35,6 +35,41 @@
     masked: false
   when: chimebox_panic_button_escape_to_tty_enabled | default(false) | bool
 
+- name: Set Ctrl+Alt+Del host behavior (mask the reboot/escape path by default)
+  ansible.builtin.systemd:
+    name: ctrl-alt-del.target
+    masked: "{{ chimebox_lockdown_ctrl_alt_del == 'mask' }}"
+    daemon_reload: true
+  # Stock systemd aliases ctrl-alt-del.target -> reboot.target, so a single
+  # Ctrl+Alt+Del reboots the Pi -- an undocumented escape that also dirties
+  # the disk and, caught in the boot window (kiosk torn down, X not yet up),
+  # can expose a shell (#19). 'mask' (default) makes a single press a no-op;
+  # 'reboot' restores stock behavior for dev/operator boxes.
+
+- name: Ensure systemd manager drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure the Ctrl+Alt+Del burst-reboot (7 presses in 2s)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system.conf.d/10-chimebox-ctrl-alt-del.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by chimebox Ansible (lockdown role).
+      # Masking ctrl-alt-del.target stops a SINGLE press from rebooting, but
+      # systemd separately force-reboots on 7 presses within 2s regardless of
+      # that mask. Disable the burst action too so a kid mashing the combo
+      # still can't reboot. ('reboot-force' is systemd's stock default.)
+      [Manager]
+      CtrlAltDelBurstAction={{ 'none' if chimebox_lockdown_ctrl_alt_del == 'mask' else 'reboot-force' }}
+  notify: Reexec systemd manager
+
 - name: Verify chimebox user has no sudoers entries
   ansible.builtin.shell: |
     set -o pipefail
