@@ -487,6 +487,52 @@ without revealing the maintainer's environment**. The
 local-overrides pattern is the smallest disruption to the Ansible
 workflow that achieves it.
 
+## Pattern 13: Polite shutdown as the default (clean guest-OS teardown)
+
+A snapshot taken while the guest is running is dirty (Pattern 3). The
+same is true of the **whole machine**: any path that tears the system
+down without first letting the guest OS run its own shutdown leaves the
+disk image dirty and the next boot greets the kid with *"Mac OS was not
+shut down properly."* So a clean guest shutdown must be the **default on
+every power path**, not a thing you remember to do.
+
+The mechanism is the polite-shutdown sequence (Pattern 3), wrapped so it
+runs automatically. Verified on the dev unit: `SIGTERM` to BasiliskII
+makes Mac OS render its shutdown dialog **inside** the emulator window
+and then *waits for a human to click "Shut Down"* — so an unattended
+hook must also **synthesize that click** (a Return keystroke via
+`xdotool`'s XTEST path into the focused emulator window). Only then does
+the guest flush and unmount (HFS `drAtrb` at byte 1034 flips
+`0000`→`0100`) and the emulator exit. `SIGTERM` alone is the classic
+false assumption — it pops a dialog and nothing more.
+
+The crucial structural insight is **where** that cleanup runs:
+
+| Approach | When it runs | Reliable? |
+|---|---|---|
+| `/usr/local/sbin` wrappers shadowing `reboot`/`poweroff`/`shutdown`/`halt` | *Before* the shutdown transaction starts, while X + emulator are alive | **Yes** |
+| systemd `ExecStop` pre-shutdown unit | *During* the shutdown transaction | **No** — `logind` tears down the getty-autologin session scope (X + emulator) first, so it no-ops |
+
+`/usr/local/sbin` is first on `PATH` — including the Argon power-button
+daemon's PATH and sudo's `secure_path` — so the wrappers transparently
+intercept the real commands, run the clean shutdown while everything is
+still alive, then `exec` the real binary. The systemd hook was tried and
+**measured** to lose the race to `logind` even with `After=user.slice`;
+it's kept only as a harmless best-effort net + shutdown breadcrumb.
+Closing the `systemctl reboot`/`poweroff` gap entirely would require the
+kiosk to run as a systemd service with `ExecStopPre` cleanup (so its own
+ordered teardown runs the polite shutdown) — a larger change deferred
+for the gift.
+
+This generalizes: any appliance that embeds a guest that caches writes
+(an emulator, a VM, a database) wants the same shape — *intercept the
+power command, quiesce the guest while it's still alive, then proceed.*
+The "ask politely" mechanism differs per guest (Mac OS: signal + confirm
+the dialog; QEMU: `system_powerdown` via the monitor; a DB: a clean
+`stop`), but "do it before the transaction, not during it" is universal.
+
+See `pi/ansible/roles/clean-shutdown` and issue #18.
+
 ## How forking would actually work
 
 Suppose you wanted **chimebox-amiga**: same architectural shape,

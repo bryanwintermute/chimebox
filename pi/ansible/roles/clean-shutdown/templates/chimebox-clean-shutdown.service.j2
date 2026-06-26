@@ -1,0 +1,47 @@
+# {{ ansible_managed }}
+# chimebox-clean-shutdown.service -- best-effort "shut the Mac down cleanly
+# before the system goes down" hook. Installed by roles/clean-shutdown.
+#
+# This is the FALLBACK layer. The reliable path is the /usr/local/sbin
+# reboot/poweroff/shutdown/halt wrappers, which run while X is guaranteed
+# alive. This unit exists to catch callers that bypass those wrappers
+# (notably `systemctl poweroff` / `systemctl reboot`, which use an absolute
+# path). It is best-effort because the kiosk's X session lives in a logind
+# session scope (user-{{ chimebox_user_uid | default(1500) }}.slice) whose
+# teardown is not strictly ordered against this unit -- so X (and thus the
+# emulator window we need to send Return to) may already be gone by the time
+# ExecStop runs. When X is still up, it works; when it isn't, chimebox-stop-mac
+# degrades to a logged no-op and the power action proceeds.
+#
+# Keeping default dependencies gives the unit the implicit
+# Before=shutdown.target + Conflicts=shutdown.target that make ExecStop fire
+# during shutdown.
+#
+# IMPORTANT (verified on chimebox-bryan, 2026-06-26): this hook USUALLY LOSES
+# THE RACE. On a getty-autologin kiosk the X session + BasiliskII live in a
+# logind session scope that systemd-logind tears down very early in the
+# shutdown, before this unit's ExecStop runs -- so for `systemctl reboot` /
+# `systemctl poweroff` the Mac is already gone and chimebox-stop-mac just
+# logs a no-op (the disk was torn down dirty). Neither After=getty@tty1 nor
+# After=user.slice changes that. The RELIABLE path is the /usr/local/sbin
+# reboot/poweroff/shutdown/halt wrappers, which run while X is alive. This
+# unit is kept as a harmless best-effort safety net + shutdown breadcrumb:
+# it cleanly stops the Mac in any path where BasiliskII is still alive when
+# it runs, and no-ops otherwise. Truly closing the `systemctl` gap needs the
+# kiosk to become a systemd service with ExecStopPre cleanup (see #18).
+
+[Unit]
+Description=Cleanly shut down the emulated Mac before system shutdown (best-effort)
+After=getty@tty1.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/sbin/chimebox-stop-mac --for-shutdown
+TimeoutStopSec={{ chimebox_clean_shutdown_hook_timeout_seconds | int }}
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

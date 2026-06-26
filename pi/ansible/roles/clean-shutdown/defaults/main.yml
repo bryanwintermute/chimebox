@@ -1,0 +1,50 @@
+---
+# roles/clean-shutdown/defaults/main.yml
+#
+# "Polite shutdown as the default" -- see roles/clean-shutdown/README.md
+# and issue #18. Every power path that tears the system down without
+# first cleanly shutting down the emulated Mac (BasiliskII guest) leaves
+# System.dsk dirty and the next boot shows "Mac OS was not shut down
+# properly." This role makes the clean shutdown automatic.
+
+# Master switch. Default ON: every chimebox benefits from never leaving a
+# dirty disk image behind.
+chimebox_clean_shutdown_enabled: true
+
+# Install the /usr/local/sbin reboot/poweroff/shutdown/halt wrappers (plus
+# chimebox-reboot / chimebox-poweroff aliases). Because /usr/local/sbin is
+# first on PATH -- including the Argon power-button daemon's PATH and sudo's
+# secure_path -- these shadow the real commands and run the clean Mac
+# shutdown FIRST, while X is still alive (the reliable path). Set false to
+# leave the stock commands untouched (you then rely only on the best-effort
+# systemd hook below).
+chimebox_clean_shutdown_install_wrappers: true
+
+# Install the best-effort systemd pre-shutdown unit. This catches callers
+# that bypass the PATH wrappers (notably `systemctl poweroff`/`reboot`).
+# It is BEST-EFFORT only: the kiosk's X session lives in a logind session
+# scope whose teardown isn't strictly ordered against this unit, so X may
+# already be gone when it runs. The wrappers above are the reliable path.
+chimebox_clean_shutdown_systemd_hook: true
+
+# Max seconds chimebox-stop-mac waits for BasiliskII to exit after asking
+# Mac OS to shut down. Mac OS 8.1 cleanly shuts down in well under 10s once
+# the dialog is confirmed; 30 is a generous ceiling that still keeps an
+# operator reboot snappy. (When BasiliskII isn't running it's an instant
+# no-op -- there's no delay when there's nothing to stop.)
+chimebox_clean_shutdown_timeout_seconds: 30
+
+# TimeoutStopSec for the systemd unit's ExecStop. Must comfortably exceed
+# chimebox_clean_shutdown_timeout_seconds so systemd doesn't SIGKILL the
+# helper mid-shutdown.
+chimebox_clean_shutdown_hook_timeout_seconds: 60
+
+# How the "Shut Down" dialog is auto-confirmed. SIGTERM makes Mac OS render
+# its shutdown dialog inside the emulator window; we synthesize the default
+# button (Return) via xdotool's XTEST path. We retry while BasiliskII is
+# still alive to absorb dialog-render latency.
+chimebox_clean_shutdown_return_attempts: 5
+chimebox_clean_shutdown_return_interval_seconds: 2
+
+# The kiosk X display. start.sh runs BasiliskII on :0 via xinit.
+chimebox_clean_shutdown_display: ":0"

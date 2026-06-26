@@ -1,0 +1,96 @@
+---
+# roles/clean-shutdown/tasks/main.yml
+#
+# Make a clean Mac OS shutdown the default on every power path. See
+# roles/clean-shutdown/README.md and issue #18.
+#
+# Layers (most -> least reliable):
+#   1. /usr/local/sbin reboot/poweroff/shutdown/halt wrappers -- shadow the
+#      real commands for PATH-based callers (Argon power button, operator
+#      `sudo reboot`). Run while X is alive, so the dialog auto-confirm is
+#      reliable.
+#   2. chimebox-clean-shutdown.service -- best-effort catch for `systemctl`
+#      and other absolute-path callers.
+# Both call the same primitive: /usr/local/sbin/chimebox-stop-mac.
+
+- name: Install xdotool (auto-confirms the Mac shutdown dialog via XTEST)
+  ansible.builtin.apt:
+    name: xdotool
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install chimebox-stop-mac primitive
+  ansible.builtin.template:
+    src: chimebox-stop-mac.j2
+    dest: /usr/local/sbin/chimebox-stop-mac
+    owner: root
+    group: root
+    mode: "0755"
+
+# --- Layer 1: command wrappers ----------------------------------------
+
+- name: Install the clean-shutdown command wrapper
+  ansible.builtin.template:
+    src: chimebox-clean-shutdown-wrapper.j2
+    dest: /usr/local/sbin/chimebox-clean-shutdown-wrapper
+    owner: root
+    group: root
+    mode: "0755"
+  when: chimebox_clean_shutdown_install_wrappers | bool
+
+- name: Shadow reboot/poweroff/shutdown/halt (+ friendly aliases) with the wrapper
+  ansible.builtin.file:
+    src: chimebox-clean-shutdown-wrapper
+    dest: "/usr/local/sbin/{{ item }}"
+    state: "{{ 'link' if (chimebox_clean_shutdown_install_wrappers | bool) else 'absent' }}"
+    force: true
+  loop:
+    - reboot
+    - poweroff
+    - shutdown
+    - halt
+    - chimebox-reboot
+    - chimebox-poweroff
+
+- name: Remove the wrapper when wrappers are disabled
+  ansible.builtin.file:
+    path: /usr/local/sbin/chimebox-clean-shutdown-wrapper
+    state: absent
+  when: not (chimebox_clean_shutdown_install_wrappers | bool)
+
+# --- Layer 2: best-effort systemd pre-shutdown unit -------------------
+
+- name: Install the best-effort pre-shutdown systemd unit
+  ansible.builtin.template:
+    src: chimebox-clean-shutdown.service.j2
+    dest: /etc/systemd/system/chimebox-clean-shutdown.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+  when: chimebox_clean_shutdown_systemd_hook | bool
+
+- name: Enable the best-effort pre-shutdown unit
+  ansible.builtin.systemd:
+    name: chimebox-clean-shutdown.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: chimebox_clean_shutdown_systemd_hook | bool
+
+- name: Disable and remove the pre-shutdown unit when the hook is off
+  when: not (chimebox_clean_shutdown_systemd_hook | bool)
+  block:
+    - name: Stop and disable the pre-shutdown unit
+      ansible.builtin.systemd:
+        name: chimebox-clean-shutdown.service
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove the pre-shutdown unit file
+      ansible.builtin.file:
+        path: /etc/systemd/system/chimebox-clean-shutdown.service
+        state: absent
+      notify: Reload systemd

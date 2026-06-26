@@ -1,0 +1,76 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-clean-shutdown-wrapper
+#
+# Multi-call wrapper. Installed (as symlinks) at /usr/local/sbin/{reboot,
+# poweroff,shutdown,halt} and /usr/local/sbin/{chimebox-reboot,
+# chimebox-poweroff}. Because /usr/local/sbin is first on PATH -- including
+# the Argon power-button daemon's PATH (os.system("reboot") /
+# os.system("shutdown now -h")) and sudo's secure_path -- a bare
+# reboot/poweroff/shutdown/halt resolves HERE instead of the real binary.
+#
+# We cleanly shut down the emulated Mac FIRST, while X is still alive (which
+# is what makes the dialog auto-confirm reliable), then exec the real
+# systemd command. This is the robust path for the Argon button and for
+# operator reboots. The chimebox-clean-shutdown.service systemd unit is only
+# a best-effort fallback for callers that bypass PATH (e.g. `systemctl`).
+
+set -u
+
+# Defensive PATH so the real binary lookup below and chimebox-stop-mac
+# resolve regardless of the caller's environment.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+self="$(basename "$0")"
+STOP_MAC="/usr/local/sbin/chimebox-stop-mac"
+
+# Friendly aliases map to real actions.
+case "${self}" in
+    chimebox-reboot)   self="reboot" ;;
+    chimebox-poweroff) self="poweroff" ;;
+esac
+
+run_stop_mac() {
+    [ -x "${STOP_MAC}" ] || return 0
+    echo "chimebox: politely shutting down the Mac before ${self}..." >&2
+    # Best-effort and time-bounded inside the helper; never block the
+    # actual power action on it.
+    "${STOP_MAC}" --for-shutdown || true
+}
+
+# Decide whether this invocation is actually taking the system down NOW.
+want_stop=1
+case "${self}" in
+    reboot|poweroff|halt)
+        want_stop=1 ;;
+    shutdown)
+        # Only stop the Mac for an *immediate* shutdown. Skip cancels (-c)
+        # and scheduled (future-time) shutdowns -- a future shutdown is
+        # caught by the systemd unit when it actually fires.
+        want_stop=0
+        for arg in "$@"; do
+            case "${arg}" in
+                -c)      want_stop=0; break ;;
+                now|+0)  want_stop=1 ;;
+            esac
+        done ;;
+    *)
+        want_stop=1 ;;
+esac
+
+[ "${want_stop}" -eq 1 ] && run_stop_mac
+
+# Exec the real binary, skipping our own dir to avoid recursion.
+for d in /usr/sbin /sbin /usr/bin /bin; do
+    if [ -x "${d}/${self}" ] && [ "${d}/${self}" != "/usr/local/sbin/${self}" ]; then
+        exec "${d}/${self}" "$@"
+    fi
+done
+
+# Fallback (the real binary should always be found above): drive systemd
+# directly so the power action still happens.
+case "${self}" in
+    reboot) exec /usr/bin/systemctl reboot ;;
+    halt)   exec /usr/bin/systemctl halt ;;
+    *)      exec /usr/bin/systemctl poweroff ;;
+esac

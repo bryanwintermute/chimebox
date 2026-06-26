@@ -16,6 +16,13 @@ chimebox_check_reachable
 log_info "Pausing the chimebox kiosk on ${CHIMEBOX_SSH_HOST}..."
 chimebox_ssh_interactive "
     set -euo pipefail
+    # Cleanly shut down the emulated Mac first (auto-confirms the Mac OS
+    # shutdown dialog and waits for a clean unmount) so pausing the kiosk
+    # for admin work doesn't leave System.dsk dirty. --for-shutdown leaves
+    # the bedtime sentinel armed so the supervisor idles while we work.
+    if sudo test -x /usr/local/sbin/chimebox-stop-mac; then
+        sudo /usr/local/sbin/chimebox-stop-mac --for-shutdown || true
+    fi
     sudo systemctl stop getty@tty1.service || true
     sudo pkill -u ${CHIMEBOX_USER} || true
     sleep 1
@@ -35,7 +42,9 @@ set -e
 
 echo
 log_info "Resuming the chimebox kiosk..."
-chimebox_ssh "sudo systemctl start getty@tty1.service"
+# Clear the bedtime sentinel that the polite stop armed, so the supervisor
+# respawns BasiliskII once the kiosk getty restarts.
+chimebox_ssh "sudo rm -f /run/chimebox-bedtime; sudo systemctl start getty@tty1.service"
 log_ok "Kiosk resumed."
 
 if [[ ${ssh_rc} -ne 0 ]]; then

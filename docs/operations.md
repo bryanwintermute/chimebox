@@ -257,6 +257,35 @@ Stops the kiosk, opens an interactive shell. When you exit the
 shell, the kiosk auto-resumes. Use for `apt update`, log
 inspection, or hands-on debugging.
 
+### Safely reboot or power off the chimebox
+
+Every reboot / power-off path that runs through the shell or the
+Argon power button now **politely shuts down Mac OS first** — so
+`System.dsk` keeps its HFS "clean unmount" flag and the next boot
+doesn't show *"Mac OS was not shut down properly."* See
+`pi/ansible/roles/clean-shutdown`.
+
+```sh
+ssh admin@HOST 'sudo reboot'      # clean: stops the Mac, then reboots
+ssh admin@HOST 'sudo poweroff'    # clean: stops the Mac, then powers off
+# Friendly aliases that do the same, with a clearer name:
+ssh admin@HOST 'sudo chimebox-reboot'
+ssh admin@HOST 'sudo chimebox-poweroff'
+```
+
+The Argon ONE V3 case power button is covered too (its daemon runs
+`reboot` / `shutdown now -h`, which resolve to the same wrappers).
+
+**Avoid `systemctl reboot` / `systemctl poweroff` on the kiosk.**
+Those bypass the wrappers, and `systemd-logind` tears the emulator
+down before the best-effort fallback unit can act — leaving a dirty
+disk. Use the bare `reboot` / `poweroff` (or the `chimebox-*` aliases)
+above, which run the clean shutdown while the emulator is still alive.
+
+Pulling the power cord is never clean — HFS just self-repairs on the
+next boot. The factory baseline and snapshots are the safety net for
+that case.
+
 ### Switch input mode (physical vs PiKVM)
 
 The kiosk's mouse-handling mode depends on whether you're using

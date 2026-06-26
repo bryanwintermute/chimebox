@@ -1,0 +1,6 @@
+---
+# roles/clean-shutdown/handlers/main.yml
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true

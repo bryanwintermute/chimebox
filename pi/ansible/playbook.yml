@@ -43,6 +43,9 @@
       tags: [kiosk-x, x11, display]
     - role: chimebox
       tags: [chimebox, runtime]
+    - role: clean-shutdown
+      tags: [clean-shutdown, shutdown]
+      when: chimebox_clean_shutdown_enabled | default(true) | bool
     - role: persistence
       tags: [persistence, snapshots]
     - role: lockdown

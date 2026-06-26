@@ -1,0 +1,118 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/sbin/chimebox-stop-mac
+#
+# Cleanly shut down the emulated Mac (the BasiliskII guest) so System.dsk
+# gets the HFS "volume unmounted cleanly" flag set and the next boot does
+# NOT show "Mac OS was not shut down properly."
+#
+# Mechanism (verified on chimebox-bryan, 2026-06-26):
+#   1. SIGTERM to BasiliskII makes Mac OS 8.1 render its standard
+#      "Are you sure you want to shut down?" dialog INSIDE the emulator
+#      window. The process does NOT exit on its own -- a human would have
+#      to click "Shut Down".
+#   2. We synthesize that click by sending Return (the dialog's default
+#      button) to the focused BasiliskII window via xdotool's XTEST path.
+#      (XTEST injects at the X server input layer; SDL2/BasiliskII sees a
+#      real keystroke. A synthetic XSendEvent would be ignored.)
+#   3. Mac OS runs its real shutdown (flush caches, unmount the HFS
+#      volume -> drAtrb clean bit), then BasiliskII exits. We poll for it.
+#
+# Idempotent: if BasiliskII isn't running it's a no-op (the Mac is already
+# down). Designed to be called from the reboot/poweroff wrappers, the Argon
+# power-button path, the best-effort systemd pre-shutdown unit, and
+# service-mode.
+#
+# Usage: chimebox-stop-mac [--for-shutdown]
+#   --for-shutdown  The whole system is going down: leave the supervisor
+#                   "bedtime" sentinel armed so the kiosk doesn't respawn
+#                   the Mac during teardown. (/run is cleared on next boot.)
+#   (default)       Standalone: on timeout/failure, clear the sentinel so
+#                   the kiosk auto-recovers rather than idling forever.
+
+set -u
+
+# Defensive PATH: this runs from sudo, the Argon daemon, and a systemd
+# ExecStop, so don't assume the caller's PATH includes runuser/xdotool/pgrep.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+LOG_TAG="chimebox-stop-mac"
+log() { logger -t "${LOG_TAG}" -- "$*" 2>/dev/null || true; echo "${LOG_TAG}: $*"; }
+
+CHIMEBOX_USER="{{ chimebox_user }}"
+CHIMEBOX_HOME="{{ chimebox_home }}"
+SENTINEL="/run/chimebox-bedtime"
+TIMEOUT={{ chimebox_clean_shutdown_timeout_seconds | int }}
+RETURN_ATTEMPTS={{ chimebox_clean_shutdown_return_attempts | int }}
+RETURN_INTERVAL={{ chimebox_clean_shutdown_return_interval_seconds | int }}
+DISPLAY_NUM="{{ chimebox_clean_shutdown_display }}"
+XAUTHORITY_PATH="${CHIMEBOX_HOME}/.Xauthority"
+
+FOR_SHUTDOWN=0
+case "${1:-}" in
+    --for-shutdown) FOR_SHUTDOWN=1 ;;
+    "") ;;
+    *) log "ignoring unknown argument: ${1}" ;;
+esac
+
+b2_running() { pgrep -x BasiliskII >/dev/null 2>&1; }
+
+# Send Return (default "Shut Down" button) to the focused BasiliskII window.
+# Runs as the kiosk user against its X session. Best-effort: a missing
+# xdotool or a dead X server must never abort the shutdown.
+confirm_dialog() {
+    command -v xdotool >/dev/null 2>&1 || {
+        log "xdotool not installed; cannot auto-confirm the Mac dialog"
+        return 1
+    }
+    runuser -u "${CHIMEBOX_USER}" -- \
+        env DISPLAY="${DISPLAY_NUM}" XAUTHORITY="${XAUTHORITY_PATH}" HOME="${CHIMEBOX_HOME}" \
+        xdotool key --clearmodifiers Return >/dev/null 2>&1
+}
+
+if ! b2_running; then
+    log "BasiliskII not running; nothing to shut down (no-op)."
+    exit 0
+fi
+
+log "requesting Mac OS shutdown (arming sentinel + SIGTERM to BasiliskII)"
+touch "${SENTINEL}" 2>/dev/null || true
+chmod 644 "${SENTINEL}" 2>/dev/null || true
+
+# SIGTERM every BasiliskII instance (normally exactly one).
+while read -r pid; do
+    if [ -n "${pid}" ]; then
+        kill -TERM "${pid}" 2>/dev/null || true
+    fi
+done < <(pgrep -x BasiliskII)
+
+# Let the dialog render, then confirm it. Retry while BasiliskII is still
+# alive (absorbs render latency) without spamming once it's gone.
+sleep "${RETURN_INTERVAL}"
+attempt=0
+while [ "${attempt}" -lt "${RETURN_ATTEMPTS}" ]; do
+    b2_running || break
+    attempt=$((attempt + 1))
+    log "confirming shutdown dialog (Return attempt ${attempt}/${RETURN_ATTEMPTS})"
+    confirm_dialog || true
+    sleep "${RETURN_INTERVAL}"
+done
+
+# Poll for clean exit, up to TIMEOUT seconds.
+deadline=$(( $(date +%s) + TIMEOUT ))
+while b2_running; do
+    if [ "$(date +%s)" -ge "${deadline}" ]; then
+        log "WARNING: BasiliskII still running after ${TIMEOUT}s; the Mac may not have shut down cleanly."
+        # Standalone callers: clear the sentinel so the kiosk recovers
+        # instead of idling forever. For --for-shutdown we're going down
+        # anyway, so leave it armed.
+        if [ "${FOR_SHUTDOWN}" -eq 0 ]; then
+            rm -f "${SENTINEL}" 2>/dev/null || true
+        fi
+        exit 1
+    fi
+    sleep 1
+done
+
+log "BasiliskII exited; Mac OS shut down cleanly (sentinel left armed)."
+exit 0

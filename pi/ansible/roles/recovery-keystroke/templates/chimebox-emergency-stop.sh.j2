@@ -21,16 +21,20 @@ log() {
 
 log "emergency stop initiated"
 
-# Arm sentinel so the supervisor doesn't respawn during teardown
-touch /run/chimebox-bedtime
-
-bpid="$(pgrep -x BasiliskII | head -1 || true)"
-if [ -n "${bpid}" ]; then
-    # SIGTERM gives Mac OS its shutdown dialog; we don't wait for
-    # the user to confirm because emergency-stop should be fast.
-    # If the Mac dialog appears briefly before the kiosk dies, that's
-    # OK -- it's just visual confirmation that the stop is honest.
-    kill -TERM "${bpid}" 2>/dev/null || true
+# Cleanly shut down the emulated Mac first so we don't leave System.dsk
+# dirty. chimebox-stop-mac arms the bedtime sentinel, SIGTERMs BasiliskII,
+# auto-confirms Mac OS's "Shut Down" dialog, and waits for a clean unmount
+# (a few seconds). --for-shutdown leaves the sentinel armed so the kiosk
+# stays down until wake-up.sh. Falls back to a bare SIGTERM if the
+# primitive isn't installed (older images).
+if [ -x /usr/local/sbin/chimebox-stop-mac ]; then
+    /usr/local/sbin/chimebox-stop-mac --for-shutdown || true
+else
+    touch /run/chimebox-bedtime
+    bpid="$(pgrep -x BasiliskII | head -1 || true)"
+    if [ -n "${bpid}" ]; then
+        kill -TERM "${bpid}" 2>/dev/null || true
+    fi
 fi
 
 # Stop getty so X tears down (matches scripts/bedtime.sh phase 3).
