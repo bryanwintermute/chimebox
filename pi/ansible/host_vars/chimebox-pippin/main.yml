@@ -1,0 +1,69 @@
+---
+# host_vars/chimebox-pippin/main.yml -- overrides for chimebox-pippin.
+#
+# chimebox-pippin is a KID-HANDOFF unit (the niece's chimebox), as
+# opposed to chimebox-bryan which is the operator/dev box. This file is
+# committed; values are non-secret per-host config. Anything that
+# identifies the location (LAN CIDR, audio device, chime WAV path) lives
+# in the gitignored local.yml alongside this file.
+#
+# Posture: maximally locked down. Where the role default is already the
+# kid-safe choice, we still set the security-critical ones explicitly so
+# the intent is documented and can't silently regress.
+
+# --- Containment (the whole point of a kid unit) ----------------------
+
+# CRITICAL: do NOT enable escape-to-tty on a kid unit. The combo
+# (Ctrl+Alt+Shift+T held 3s) drops to a real Linux getty login -- an
+# intentional escape hatch for an operator, and exactly the kind of
+# shell-escape the lockdown role otherwise closes (#19). The role
+# default is already false; we pin it false here so it's unmistakable.
+# (With this false, the lockdown role also keeps tty2-tty6 masked.)
+chimebox_panic_button_escape_to_tty_enabled: false
+
+# Ctrl+Alt+Del is neutralized by the lockdown role's default
+# (chimebox_lockdown_ctrl_alt_del: mask -> single press no-op AND the
+# 7x-burst reboot disabled). That default is correct for a kid unit, so
+# we don't override it; noted here so the posture is explicit.
+
+# The Ctrl+Alt+Shift+Z "restore latest snapshot" kid-reset combo is an
+# ADULT recovery tool (undo a disaster the kid caused). It is DESTRUCTIVE
+# -- it rolls System.dsk back to the last snapshot, discarding anything
+# since. Left OFF (role default) for the handoff so a kid mashing keys
+# can't trigger a rollback. Flip to true only if a supervising adult
+# wants the one-combo undo and accepts the obscure-combo risk.
+chimebox_panic_button_kid_reset_enabled: false
+
+# --- Resilience (she's offline; Bryan is remote) ----------------------
+
+# Her unit is wifi and Bryan is not on-site, so enable the net-watchdog's
+# last-resort rfkill radio cycle. Safe (rfkill ioctl only); cheap
+# insurance against a wedged radio when no one can power-cycle it.
+chimebox_net_watchdog_aggressive_recovery: true
+
+# --- Hardware / experience --------------------------------------------
+
+# Same Pi 5 + Argon One V3 case as the dev box (NVMe swapped back in).
+# Set false if her unit ends up in a different case without the fan HAT.
+chimebox_argon_one_v3: true
+
+# Display: we deliberately do NOT set chimebox_display_profile, so it
+# uses the default 'pillarbox' -- which is exactly right for her reused
+# 1080p 16:9 LCD: a 1920x1080 X canvas with a 1440x1080 (4:3) BasiliskII
+# window centered, black pillarbox bars on the sides. Undistorted,
+# period-correct Mac, sharp pixels. Bonus kid-containment: pillarbox uses
+# init_grab=true, so the mouse cursor is captured and CANNOT leave the
+# Mac screen. (The 'matched-stretched' override on chimebox-bryan exists
+# only for JetKVM coordinate mapping and would distort a real monitor.)
+
+# The Mac OS startup chime -- the signature delight. Host-side WAV played
+# before each BasiliskII launch (the emulator fast-paths past the ROM
+# chime). The per-machine WAV source path lives in local.yml.
+chimebox_audio_startup_chime_enabled: true
+
+# NOTE: chimebox_wifi_band is intentionally NOT set here. The 'bg'
+# (2.4GHz) lock on chimebox-bryan is specific to that location's
+# band-steering AP. Only add a band lock here if her location shows the
+# same 5GHz thrash (watch `journalctl -t chimebox-net-watchdog` and the
+# wpa_supplicant ASSOC-REJECT pattern from #23). The powersave-off +
+# infinite-retries tuning from the wifi-tuning role applies regardless.
