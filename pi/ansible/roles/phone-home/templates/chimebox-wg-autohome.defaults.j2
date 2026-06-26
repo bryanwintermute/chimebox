@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# Deployment config for chimebox-wg-autohome (sourced by the script).
+#
+# Values that identify the operator's home network or notification
+# endpoints are deployment-specific and should be set in the host's
+# gitignored local.yml, NOT in committed defaults. The committed role
+# defaults leave them blank (safe: blank HOME_LAN_PREFIX => always
+# treat as offsite => keep the tunnel up).
+WG_IF={{ chimebox_phone_home_wg_interface }}
+HOME_LAN_PREFIX="{{ chimebox_phone_home_home_lan_prefix }}"
+HOTSPOT_CON="{{ chimebox_phone_home_hotspot_con }}"
+HANDSHAKE_MAX={{ chimebox_phone_home_handshake_max }}
+NODE_NAME={{ inventory_hostname }}
+# Optional edge-triggered connectivity alerts (off unless configured).
+WG_NOTIFY={{ chimebox_phone_home_notify | string | lower }}
+NTFY_SERVER={{ chimebox_phone_home_ntfy_server }}
+NTFY_TOPIC={{ chimebox_phone_home_ntfy_topic }}
+OOB_SERVER={{ chimebox_phone_home_oob_ntfy_server }}
+OOB_TOPIC={{ chimebox_phone_home_oob_ntfy_topic }}
+STATE_FILE=/run/chimebox-wg-autohome.state

@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Periodically run chimebox-wg-autohome (phone-home tunnel keepalive)
+
+[Timer]
+# Run shortly after boot, then every interval. The watchdog is the sole
+# manager of wg0 (it brings the tunnel up offsite), so the OnBootSec
+# value bounds how long after boot the tunnel takes to come up.
+OnBootSec={{ chimebox_phone_home_boot_sec }}s
+OnUnitActiveSec={{ chimebox_phone_home_interval_seconds }}s
+RandomizedDelaySec=5s
+Unit=chimebox-wg-autohome.service
+
+[Install]
+WantedBy=timers.target

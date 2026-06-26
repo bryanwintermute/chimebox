@@ -74,6 +74,9 @@
     - role: pmic-watchdog
       tags: [pmic-watchdog, observability]
       when: chimebox_pmic_watchdog_enabled | default(true) | bool
+    - role: phone-home
+      tags: [phone-home, networking, wireguard]
+      when: chimebox_phone_home_enabled | default(false) | bool
 
   post_tasks:
     - name: Print next steps

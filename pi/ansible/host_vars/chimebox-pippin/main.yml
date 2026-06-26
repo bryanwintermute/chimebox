@@ -41,6 +41,15 @@ chimebox_panic_button_kid_reset_enabled: false
 # insurance against a wedged radio when no one can power-cycle it.
 chimebox_net_watchdog_aggressive_recovery: true
 
+# Remote management: dial home to Bryan's WireGuard server so he can SSH
+# in for admin/updates once her unit leaves his house. The tunnel is a
+# management path only (AllowedIPs = home subnet, not a default route),
+# so it cannot give the kiosk internet or break her isolation. The
+# secret /etc/wireguard/wg0.conf is bootstrapped by hand (per-host
+# secret, never in this public repo -- see roles/phone-home/README.md).
+# Home-LAN prefix + any ntfy alerting live in the gitignored local.yml.
+chimebox_phone_home_enabled: true
+
 # --- Hardware / experience --------------------------------------------
 
 # Same Pi 5 + Argon One V3 case as the dev box (NVMe swapped back in).

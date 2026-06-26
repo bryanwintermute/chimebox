@@ -1,0 +1,8 @@
+[Unit]
+Description=chimebox WireGuard phone-home tunnel watchdog (up offsite, keepalive)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/chimebox-wg-autohome

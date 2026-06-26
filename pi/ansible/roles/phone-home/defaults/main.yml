@@ -1,0 +1,46 @@
+---
+# roles/phone-home/defaults/main.yml
+#
+# A WireGuard "phone-home" management tunnel so an operator can reach a
+# chimebox that lives at someone else's house. Default OFF: most
+# chimeboxes don't need it, and the public default must ship no VPN.
+# Enable per-host (e.g. the kid-handoff unit) in host_vars.
+#
+# NO SECRETS HERE. The tunnel itself (/etc/wireguard/wg0.conf: private
+# key, endpoint, peer, AllowedIPs, PersistentKeepalive) is a per-host
+# secret created by MANUAL BOOTSTRAP and is never managed by Ansible --
+# this role only installs the keepalive watchdog. See README.
+
+chimebox_phone_home_enabled: false
+
+# WireGuard interface name (matches /etc/wireguard/<name>.conf).
+chimebox_phone_home_wg_interface: wg0
+
+# Watchdog cadence.
+chimebox_phone_home_boot_sec: 30
+chimebox_phone_home_interval_seconds: 60
+
+# Max age (seconds) of the last WG handshake before the watchdog bounces
+# the tunnel to re-establish it.
+chimebox_phone_home_handshake_max: 180
+
+# Operator's home-LAN IPv4 prefix, e.g. "10.0.0." -- when the box sees
+# such an address on ANY interface it considers itself "home" and keeps
+# the tunnel DOWN (reach it directly; avoids a routing hairpin while the
+# box is on the operator's own LAN during build/test). BLANK (default)
+# means "always offsite" => keep the tunnel up. Set in the host's
+# gitignored local.yml (it reveals the operator's LAN).
+chimebox_phone_home_home_lan_prefix: ""
+
+# Optional NetworkManager connection name for cellular/hotspot failover
+# (rarely useful for a chimebox; left blank).
+chimebox_phone_home_hotspot_con: ""
+
+# Optional edge-triggered connectivity alerts (off by default). Useful
+# for a box you can't physically see: get pinged when it can't reach
+# home. Set server/topic in the host's gitignored local.yml.
+chimebox_phone_home_notify: false
+chimebox_phone_home_ntfy_server: ""
+chimebox_phone_home_ntfy_topic: ""
+chimebox_phone_home_oob_ntfy_server: "https://ntfy.sh"
+chimebox_phone_home_oob_ntfy_topic: ""

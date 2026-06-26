@@ -1,0 +1,71 @@
+---
+# roles/phone-home/tasks/main.yml
+#
+# Install the WireGuard phone-home keepalive watchdog. The tunnel itself
+# (/etc/wireguard/wg0.conf) is a per-host secret deployed by MANUAL
+# BOOTSTRAP (see README) and is deliberately NOT managed here, so this
+# role -- in a public repo -- contains zero secrets.
+
+- name: Install wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Check whether the WireGuard tunnel config has been bootstrapped
+  ansible.builtin.stat:
+    path: "/etc/wireguard/{{ chimebox_phone_home_wg_interface }}.conf"
+  register: chimebox_phone_home_wgconf
+
+- name: Warn if the WireGuard tunnel config is missing
+  ansible.builtin.debug:
+    msg: >-
+      /etc/wireguard/{{ chimebox_phone_home_wg_interface }}.conf is not
+      present. The phone-home watchdog is being installed, but the tunnel
+      will not come up until you bootstrap that file by hand (per-host
+      secret -- see roles/phone-home/README.md). Generate a peer on the
+      home WG server, drop the client config here (with
+      PersistentKeepalive = 25), and the watchdog will bring it up.
+  when: not chimebox_phone_home_wgconf.stat.exists
+
+- name: Install chimebox-wg-autohome watchdog script
+  ansible.builtin.copy:
+    src: chimebox-wg-autohome.sh
+    dest: /usr/local/sbin/chimebox-wg-autohome
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install chimebox-wg-autohome defaults
+  ansible.builtin.template:
+    src: chimebox-wg-autohome.defaults.j2
+    dest: /etc/default/chimebox-wg-autohome
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install chimebox-wg-autohome.service
+  ansible.builtin.copy:
+    src: chimebox-wg-autohome.service
+    dest: /etc/systemd/system/chimebox-wg-autohome.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install chimebox-wg-autohome.timer
+  ansible.builtin.template:
+    src: chimebox-wg-autohome.timer.j2
+    dest: /etc/systemd/system/chimebox-wg-autohome.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable + start chimebox-wg-autohome.timer
+  ansible.builtin.systemd:
+    name: chimebox-wg-autohome.timer
+    enabled: true
+    state: started
+    daemon_reload: true
