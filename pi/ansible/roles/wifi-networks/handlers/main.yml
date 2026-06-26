@@ -1,0 +1,10 @@
+---
+# roles/wifi-networks/handlers/main.yml
+
+- name: Reload NetworkManager connections
+  # Pick up the new/changed keyfiles without bouncing the active
+  # connection. NM reads /etc/NetworkManager/system-connections/ on
+  # reload; the profiles then auto-connect when their SSID is in range.
+  ansible.builtin.command:
+    cmd: nmcli connection reload
+  changed_when: true

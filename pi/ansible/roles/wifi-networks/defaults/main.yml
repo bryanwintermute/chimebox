@@ -1,0 +1,21 @@
+---
+# roles/wifi-networks/defaults/main.yml
+
+# Additional Wi-Fi networks the chimebox should be able to join, beyond
+# the single network baked in at flash time (Raspberry Pi Imager only
+# supports one). NetworkManager will auto-connect to whichever known
+# SSID is in range, so listing a build-site network and a deployment
+# network lets one image move between locations with no changes.
+#
+# Each entry:
+#   ssid:     (required) the network name
+#   psk:      (required) the WPA2 pre-shared key  -- SECRET
+#   priority: (optional) autoconnect priority, higher wins when several
+#             known networks are visible at once. Default 0.
+#   hidden:   (optional) true if the SSID is not broadcast. Default false.
+#
+# SECRETS: because psk values are secret and this repo is public, define
+# the actual list in the host's GITIGNORED local.yml, not here. This
+# default is an empty list, so the role is a no-op unless a host
+# provides networks.
+chimebox_wifi_networks: []

@@ -1,0 +1,25 @@
+---
+# roles/wifi-networks/tasks/main.yml
+#
+# Lay down a NetworkManager keyfile per entry in chimebox_wifi_networks
+# so the box can roam between a build-site network and a deployment
+# network (NM auto-connects to whichever known SSID is in range). The
+# single network configured at flash time (Raspberry Pi Imager) only
+# bootstraps first boot; these are managed reproducibly from the host's
+# gitignored local.yml.
+
+- name: Deploy NetworkManager wifi connection profiles
+  ansible.builtin.template:
+    src: wifi.nmconnection.j2
+    dest: >-
+      /etc/NetworkManager/system-connections/chimebox-{{
+        item.ssid | regex_replace('[^A-Za-z0-9_-]', '-') }}.nmconnection
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ chimebox_wifi_networks }}"
+  loop_control:
+    label: "{{ item.ssid }}"
+  # no_log: the template renders the PSK; never echo it to stdout/logs.
+  no_log: true
+  notify: Reload NetworkManager connections
