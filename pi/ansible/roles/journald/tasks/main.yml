@@ -1,0 +1,37 @@
+---
+# roles/journald/tasks/main.yml
+#
+# Make the systemd journal persistent across reboots so the forensic
+# trail (panic-daemon, net-watchdog, pmic-watchdog, "Pi goes silent"
+# post-mortems) survives the very reboot you're trying to debug. See
+# roles/journald/README.md and issue #20.
+
+- name: Ensure journald.conf.d drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install chimebox journald storage drop-in
+  ansible.builtin.template:
+    src: 50-chimebox-persistent-storage.conf.j2
+    dest: /etc/systemd/journald.conf.d/50-chimebox-persistent-storage.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-journald
+
+- name: Create the persistent journal directory
+  ansible.builtin.file:
+    path: /var/log/journal
+    state: directory
+    owner: root
+    group: systemd-journal
+    mode: "2755"
+  when: chimebox_journald_persistent | bool
+  # systemd-journald would create this itself on restart, but making it
+  # explicit means the very first post-provision boot is already
+  # persistent (no lost window before the first journald restart).
+  notify: Restart systemd-journald

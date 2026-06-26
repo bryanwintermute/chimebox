@@ -1,0 +1,12 @@
+---
+# roles/journald/handlers/main.yml
+
+- name: Restart systemd-journald
+  # Re-reads journald.conf.d and, with Storage=persistent + the
+  # /var/log/journal dir present, starts writing the persistent journal
+  # immediately. Restarting systemd-journald is the supported way to
+  # apply config changes; it briefly buffers logs and does not disrupt
+  # the kiosk.
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted

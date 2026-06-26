@@ -32,6 +32,9 @@
   roles:
     - role: base
       tags: [base]
+    - role: journald
+      tags: [journald, observability]
+      when: chimebox_journald_persistent | default(true) | bool
     - role: kiosk-user
       tags: [kiosk-user, user]
     - role: basiliskii

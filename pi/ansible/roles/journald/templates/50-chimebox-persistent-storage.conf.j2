@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+# /etc/systemd/journald.conf.d/50-chimebox-persistent-storage.conf
+#
+# Overrides the Raspberry Pi OS vendor default at
+# /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf, which
+# forces Storage=volatile (journal in tmpfs, wiped every reboot).
+#
+# chimebox runs on NVMe and explicitly wants a forensic trail that
+# survives reboots, for the panic-daemon, net-watchdog, pmic-watchdog,
+# and post-mortems on incidents like "the Pi goes silent" (#23) -- the
+# whole reason those watchdogs log to the journal (#20).
+[Journal]
+Storage={{ 'persistent' if chimebox_journald_persistent | bool else 'volatile' }}
+SystemMaxUse={{ chimebox_journald_system_max_use }}
+MaxRetentionSec={{ chimebox_journald_max_retention }}

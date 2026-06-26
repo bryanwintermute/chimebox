@@ -1,0 +1,18 @@
+---
+# roles/journald/defaults/main.yml
+
+# Make the systemd journal persistent across reboots. Raspberry Pi OS
+# ships a vendor drop-in (40-rpi-volatile-storage.conf) that forces
+# Storage=volatile, so the journal lives only in tmpfs and is wiped on
+# every reboot. That destroys the forensic trail exactly when you need
+# it most -- after the kind of "Pi went silent" / panic-daemon / power
+# incident you can only debug post-mortem (#20). chimebox runs on NVMe
+# and explicitly wants the trail to survive reboots.
+chimebox_journald_persistent: true
+
+# Cap on-disk journal size and retention so the trail can't grow
+# unbounded on the NVMe. Defaults are generous enough to span the kind
+# of multi-day incident we chased on chimebox-bryan while staying tiny
+# relative to the disk.
+chimebox_journald_system_max_use: 200M
+chimebox_journald_max_retention: 30d
