@@ -96,14 +96,26 @@ chimebox_ssh_interactive "
 
     # If we just pushed an InfiniteHD.dsk and the BasiliskII prefs file
     # doesn't already mount it, add a 'disk' line. Idempotent.
+    #
+    # The existence checks MUST be sudo'd: /home/${CHIMEBOX_USER} is mode
+    # 0750 owned by the kiosk user and the admin user running this SSH
+    # session is not in that group, so a plain [[ -f ]] returns false even
+    # when the files exist -- silently skipping the injection (#15). Every
+    # branch prints a diagnostic so the outcome is never silent.
     PREFS=/home/${CHIMEBOX_USER}/.config/BasiliskII/prefs
     LIB_PATH='${CHIMEBOX_RUNTIME_DIR}/InfiniteHD.dsk'
-    if [[ -f \"\$LIB_PATH\" ]] && [[ -f \"\$PREFS\" ]]; then
-        if ! sudo grep -qF \"disk \$LIB_PATH\" \"\$PREFS\"; then
-            # Insert library-disk line right after the existing system-disk line.
-            sudo sed -i \"/^disk ${CHIMEBOX_RUNTIME_DIR//\\//\\\\/}\\/System.dsk/a disk \$LIB_PATH\" \"\$PREFS\"
-            echo 'Added InfiniteHD to BasiliskII prefs.'
-        fi
+    if ! sudo test -f \"\$LIB_PATH\"; then
+        echo 'InfiniteHD: no InfiniteHD.dsk in runtime dir; nothing to add to prefs.'
+    elif ! sudo test -f \"\$PREFS\"; then
+        echo 'InfiniteHD: WARNING prefs file not found; run Ansible provisioning first.'
+    elif sudo grep -qF \"disk \$LIB_PATH\" \"\$PREFS\"; then
+        echo 'InfiniteHD: already present in BasiliskII prefs (no change).'
+    elif ! sudo grep -qE \"^disk ${CHIMEBOX_RUNTIME_DIR//\\//\\\\/}\\/System.dsk\" \"\$PREFS\"; then
+        echo 'InfiniteHD: WARNING no System.dsk line to anchor after; NOT added.'
+    else
+        # Insert library-disk line right after the existing system-disk line.
+        sudo sed -i \"/^disk ${CHIMEBOX_RUNTIME_DIR//\\//\\\\/}\\/System.dsk/a disk \$LIB_PATH\" \"\$PREFS\"
+        echo 'InfiniteHD: added to BasiliskII prefs.'
     fi
 
     echo 'Installed:'
