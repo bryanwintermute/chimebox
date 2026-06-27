@@ -68,7 +68,9 @@
 # --- Full power-off on shutdown (no red-light limbo) -------------------
 # The Argon V3 MCU only cuts power if (a) GPIO14/UART TXD is driven, so it
 # sees a high->low edge at halt, and (b) it has been armed via I2C 0xFF
-# during shutdown. See templates/argononed-poweroff.service.j2.
+# during shutdown. enable_uart=1 drives TXD; a systemd shutdown hook arms
+# the MCU (poweroff/halt only -- never reboot) and stops the fan. See
+# templates/chimebox-argon-shutdown.sh.j2.
 
 - name: Back up /boot/firmware/config.txt (first run only)
   ansible.builtin.copy:
@@ -91,39 +93,48 @@
   # config.txt changes take effect on next boot; note printed below.
   register: argon_uart_cfg
 
-- name: Install Argon poweroff-arming systemd unit
-  ansible.builtin.template:
-    src: argononed-poweroff.service.j2
-    dest: /etc/systemd/system/argononed-poweroff.service
-    owner: root
-    group: root
-    mode: "0644"
-  when: chimebox_argon_power_cut_on_shutdown | bool
-  notify: Reload systemd for argon
-
-- name: Enable Argon poweroff-arming unit
-  ansible.builtin.systemd:
-    name: argononed-poweroff.service
-    enabled: true
-    state: started
-    daemon_reload: true
-  when: chimebox_argon_power_cut_on_shutdown | bool
-
-- name: Remove Argon poweroff-arming unit when power-cut is disabled
-  when: not (chimebox_argon_power_cut_on_shutdown | bool)
+# The old approach was an ExecStop service (argononed-poweroff.service) that
+# armed the MCU on *every* stop, including reboot. Superseded by the verb-
+# aware system-shutdown hook below, which arms only on poweroff/halt and also
+# stops the fan. Always remove the deprecated unit so older installs upgrade.
+- name: Remove deprecated Argon poweroff-arming service (superseded by hook)
   block:
-    - name: Stop and disable the poweroff-arming unit
+    - name: Stop and disable deprecated argononed-poweroff.service
       ansible.builtin.systemd:
         name: argononed-poweroff.service
         enabled: false
         state: stopped
       failed_when: false
 
-    - name: Remove the poweroff-arming unit file
+    - name: Remove deprecated argononed-poweroff.service file
       ansible.builtin.file:
         path: /etc/systemd/system/argononed-poweroff.service
         state: absent
       notify: Reload systemd for argon
+
+- name: Ensure systemd shutdown-hook directory exists
+  ansible.builtin.file:
+    path: /lib/systemd/system-shutdown
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: chimebox_argon_power_cut_on_shutdown | bool
+
+- name: Install Argon system-shutdown hook (stops fan; arms power-cut)
+  ansible.builtin.template:
+    src: chimebox-argon-shutdown.sh.j2
+    dest: /lib/systemd/system-shutdown/chimebox-argon-shutdown.sh
+    owner: root
+    group: root
+    mode: "0755"
+  when: chimebox_argon_power_cut_on_shutdown | bool
+
+- name: Remove Argon system-shutdown hook when power-cut is disabled
+  ansible.builtin.file:
+    path: /lib/systemd/system-shutdown/chimebox-argon-shutdown.sh
+    state: absent
+  when: not (chimebox_argon_power_cut_on_shutdown | bool)
 
 - name: Note that enabling UART needs a reboot to take effect
   ansible.builtin.debug:

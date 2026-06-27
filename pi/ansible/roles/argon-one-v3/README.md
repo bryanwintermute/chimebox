@@ -72,14 +72,17 @@ The Argon V3 power MCU only cuts power when two things are both true:
 
 1. **`enable_uart=1`** (added to `config.txt`) drives GPIO14/UART TXD, so it
    has a defined high→low edge when the Pi halts.
-2. A shutdown hook (**`argononed-poweroff.service`**, `ExecStop` runs
-   `argononed.py SHUTDOWN`) sends the case MCU I²C `0xFF`, arming it to watch
-   TXD and cut power when it drops low.
+2. A **systemd shutdown hook** (`/lib/systemd/system-shutdown/chimebox-argon-shutdown.sh`)
+   sends the case MCU I²C `0xFF` via `argononed.py SHUTDOWN`, arming it to
+   watch TXD and cut power when it drops low. The hook runs at the very end of
+   shutdown and is **verb-aware**: it arms only on `poweroff`/`halt` (never
+   `reboot`, so a reboot still comes back up) and stops the fan (`FANOFF`) on
+   every shutdown.
 
 The stock minimal daemon install ships neither, which is why an un-patched
 box halts but stays powered. Verified on hardware: red-light limbo → fully
-dark once both were in place. The `enable_uart` change needs **one reboot**
-to take effect.
+dark on `poweroff`/Mac **Shut Down**; `reboot` reboots normally. The
+`enable_uart` change needs **one reboot** to take effect.
 
 Set `chimebox_argon_power_cut_on_shutdown: false` to keep the stock behavior
 (Pi halts, case stays powered) — e.g. if you instead use the case's
@@ -94,8 +97,10 @@ To turn the box back on after a full power-off, press the case power button
 # Daemon status
 systemctl status argononed.service
 
-# Power-off arming hook (fires at shutdown to tell the MCU to cut power)
-systemctl status argononed-poweroff.service
+# Power-off arming hook (fires at shutdown: stops fan; arms MCU power-cut
+# on poweroff/halt). It's a system-shutdown script, not a service:
+cat /lib/systemd/system-shutdown/chimebox-argon-shutdown.sh
+journalctl -b -1 -t systemd-shutdown    # see it run during last shutdown
 
 # Live fan curve in effect
 cat /etc/argononed.conf

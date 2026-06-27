@@ -1,0 +1,38 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Argon ONE V3 systemd shutdown hook.
+#
+# systemd runs every executable in /lib/systemd/system-shutdown/ at the very
+# end of the shutdown sequence -- after services are stopped and filesystems
+# are remounted read-only -- passing the verb as $1 (poweroff|reboot|halt|
+# kexec). This is the upstream-canonical home for Argon's power handling
+# (mirrors Argon's own argon-shutdown.sh) and is more robust than a service
+# ExecStop, which races logind tearing down the kiosk session scope.
+#
+#   - FANOFF (every verb): stop the case fan as the Pi powers down, so a
+#     halted Pi isn't left with the fan still spinning.
+#   - SHUTDOWN arming (poweroff/halt ONLY, never reboot): I2C 0xFF tells the
+#     V3 MCU to cut case power the moment GPIO14/UART TXD drops low at the
+#     final halt -> the box goes fully dark instead of lingering at the red
+#     standby LED. Gated to poweroff/halt so a `reboot` still comes back up.
+#     (enable_uart=1 in config.txt is the other half -- see tasks/main.yml.)
+#
+# Verified on chimebox-bryan 2026-06-27: poweroff/Mac "Shut Down" -> fully
+# dark; reboot -> reboots normally (the MCU does not cut power on a reboot's
+# brief TXD blip, and we don't arm it on reboot regardless).
+
+pythonbin=/usr/bin/python3
+argonscript={{ chimebox_argon_install_dir }}/argononed.py
+
+[ -n "$1" ] || exit 0
+[ -x "$pythonbin" ] && [ -f "$argonscript" ] || exit 0
+
+"$pythonbin" "$argonscript" FANOFF || true
+
+case "$1" in
+  poweroff | halt)
+    "$pythonbin" "$argonscript" SHUTDOWN || true
+    ;;
+esac
+
+exit 0
