@@ -62,11 +62,40 @@ chimebox_argon_fan_curve:
   - { temp: 70, speed: 100 }
 ```
 
+## Full power-off on shutdown (no red-light limbo)
+
+By default (`chimebox_argon_power_cut_on_shutdown: true`) the role makes a
+`poweroff` actually remove case power — so the kid choosing **Shut Down**
+inside Mac OS leaves the box **dark**, not lingering at the red standby LED.
+
+The Argon V3 power MCU only cuts power when two things are both true:
+
+1. **`enable_uart=1`** (added to `config.txt`) drives GPIO14/UART TXD, so it
+   has a defined high→low edge when the Pi halts.
+2. A shutdown hook (**`argononed-poweroff.service`**, `ExecStop` runs
+   `argononed.py SHUTDOWN`) sends the case MCU I²C `0xFF`, arming it to watch
+   TXD and cut power when it drops low.
+
+The stock minimal daemon install ships neither, which is why an un-patched
+box halts but stays powered. Verified on hardware: red-light limbo → fully
+dark once both were in place. The `enable_uart` change needs **one reboot**
+to take effect.
+
+Set `chimebox_argon_power_cut_on_shutdown: false` to keep the stock behavior
+(Pi halts, case stays powered) — e.g. if you instead use the case's
+boot-on-power jumper, which deliberately keeps power applied.
+
+To turn the box back on after a full power-off, press the case power button
+(or, with the boot-on-power jumper set, re-apply power).
+
 ## Diagnosing
 
 ```sh
 # Daemon status
 systemctl status argononed.service
+
+# Power-off arming hook (fires at shutdown to tell the MCU to cut power)
+systemctl status argononed-poweroff.service
 
 # Live fan curve in effect
 cat /etc/argononed.conf

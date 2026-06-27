@@ -11,3 +11,7 @@
   ansible.builtin.systemd:
     name: argononed.service
     state: restarted
+
+- name: Reload systemd for argon
+  ansible.builtin.systemd:
+    daemon_reload: true

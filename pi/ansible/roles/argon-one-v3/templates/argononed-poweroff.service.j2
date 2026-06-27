@@ -1,0 +1,31 @@
+# {{ ansible_managed }}
+# Argon ONE V3 -- arm the case power MCU to fully cut power at shutdown.
+#
+# Without this, a `poweroff` (including the kid choosing Shut Down inside
+# Mac OS) halts the Pi but the Argon case lingers at the red standby LED --
+# it never actually removes power. The V3 MCU only cuts power if it has been
+# told to watch the serial line: `argononed.py SHUTDOWN` sends I2C 0xFF,
+# after which the MCU cuts power the moment GPIO14/UART TXD drops low at the
+# final halt. enable_uart=1 (config.txt) is what drives TXD; this unit sends
+# the arming command. Both halves are required (verified on chimebox-bryan,
+# 2026-06-27: red-light limbo -> fully dark once UART + this arming were in
+# place).
+#
+# ExecStop fires during the shutdown transition, well before the final halt,
+# so the MCU is armed in time. Same run-on-shutdown idiom as
+# chimebox-clean-shutdown.service.
+
+[Unit]
+Description=Argon ONE V3 - arm MCU to cut power at shutdown
+After=argononed.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/bin/python3 {{ chimebox_argon_install_dir }}/argononed.py SHUTDOWN
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

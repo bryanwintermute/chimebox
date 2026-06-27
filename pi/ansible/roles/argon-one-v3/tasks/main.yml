@@ -65,6 +65,75 @@
     state: started
     daemon_reload: true
 
+# --- Full power-off on shutdown (no red-light limbo) -------------------
+# The Argon V3 MCU only cuts power if (a) GPIO14/UART TXD is driven, so it
+# sees a high->low edge at halt, and (b) it has been armed via I2C 0xFF
+# during shutdown. See templates/argononed-poweroff.service.j2.
+
+- name: Back up /boot/firmware/config.txt (first run only)
+  ansible.builtin.copy:
+    src: /boot/firmware/config.txt
+    dest: /boot/firmware/config.txt.chimebox-bak
+    remote_src: true
+    force: false
+    owner: root
+    group: root
+    mode: "0755"
+  when: chimebox_argon_power_cut_on_shutdown | bool
+
+- name: Enable GPIO14 UART so the Argon MCU can detect halt (TXD low)
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    line: "enable_uart=1"
+    regexp: '^#?\s*enable_uart\s*='
+    state: present
+  when: chimebox_argon_power_cut_on_shutdown | bool
+  # config.txt changes take effect on next boot; note printed below.
+  register: argon_uart_cfg
+
+- name: Install Argon poweroff-arming systemd unit
+  ansible.builtin.template:
+    src: argononed-poweroff.service.j2
+    dest: /etc/systemd/system/argononed-poweroff.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: chimebox_argon_power_cut_on_shutdown | bool
+  notify: Reload systemd for argon
+
+- name: Enable Argon poweroff-arming unit
+  ansible.builtin.systemd:
+    name: argononed-poweroff.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: chimebox_argon_power_cut_on_shutdown | bool
+
+- name: Remove Argon poweroff-arming unit when power-cut is disabled
+  when: not (chimebox_argon_power_cut_on_shutdown | bool)
+  block:
+    - name: Stop and disable the poweroff-arming unit
+      ansible.builtin.systemd:
+        name: argononed-poweroff.service
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove the poweroff-arming unit file
+      ansible.builtin.file:
+        path: /etc/systemd/system/argononed-poweroff.service
+        state: absent
+      notify: Reload systemd for argon
+
+- name: Note that enabling UART needs a reboot to take effect
+  ansible.builtin.debug:
+    msg: >-
+      enable_uart was just added to config.txt; the Argon full-power-off
+      behavior takes effect after the next reboot.
+  when:
+    - chimebox_argon_power_cut_on_shutdown | bool
+    - argon_uart_cfg is changed
+
 - name: Apply Argon-recommended EEPROM config tweaks
   ansible.builtin.include_tasks: eeprom-config.yml
   when: chimebox_argon_apply_eeprom_tweaks | bool

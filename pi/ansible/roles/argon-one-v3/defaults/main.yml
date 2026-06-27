@@ -34,6 +34,15 @@ chimebox_argon_files:
     url: argonpowerbutton-libgpiod.py
     sha256: 14d44370b59e6b46d601a0fb455b07da36b1af1c84b2089427b7c83ba6c0ddc9
 
+# Fully cut case power when the Pi powers off (so a Mac "Shut Down" leaves
+# the box DARK, not lingering at the red standby LED). Requires enabling
+# the GPIO14 UART (so TXD has a defined high->low edge at halt) and a
+# shutdown hook that arms the Argon MCU via I2C 0xFF. Set false to keep the
+# stock behavior (Pi halts, case stays powered) -- e.g. if you instead use
+# the case's boot-on-power jumper, which deliberately keeps power applied.
+# NOTE: the config.txt enable_uart change needs a reboot to take effect.
+chimebox_argon_power_cut_on_shutdown: true
+
 # EEPROM bootloader config tweaks recommended by Argon for the V3 case.
 # Default true when chimebox_argon_one_v3 itself is true; users can
 # override per-host. The tweaks are:
