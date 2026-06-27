@@ -70,6 +70,14 @@ chimebox_argon_one_v3: true
 # chime). The per-machine WAV source path lives in local.yml.
 chimebox_audio_startup_chime_enabled: true
 
+# In-Mac "Shut Down" really powers the Pi off (she turns it back on with
+# the Argon case button) instead of silently relaunching the Mac. start.sh
+# distinguishes a deliberate Shut Down from a crash via System.dsk's clean
+# HFS unmount flag, and Restart still warm-reboots in place. Powering off
+# is safe because the disk is already cleanly unmounted by then. The
+# chimebox role installs a narrow sudoers drop-in for the one systemctl verb.
+chimebox_shutdown_action: poweroff
+
 # NOTE: chimebox_wifi_band is intentionally NOT set here. The 'bg'
 # (2.4GHz) lock on chimebox-bryan is specific to that location's
 # band-steering AP. Only add a band lock here if her location shows the

@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Let the kiosk user {{ chimebox_shutdown_action }} the Pi when the kid chooses
+# "Shut Down" inside Mac OS. start.sh detects that via the clean HFS unmount
+# flag on System.dsk and runs exactly this one command -- this grants only
+# that single systemctl verb, no shell and no other privilege.
+{{ chimebox_user }} ALL=(root) NOPASSWD: /usr/bin/systemctl {{ chimebox_shutdown_action }}

@@ -17,6 +17,23 @@ LOG_FILE="${LOG_DIR}/basiliskii-$(date +%Y%m%d-%H%M%S).log"
 # Disk paths -- must match the prefs file
 ROM="{{ chimebox_runtime_dir }}/{{ chimebox_rom_filename }}"
 SYSTEM_DISK="{{ chimebox_runtime_dir }}/{{ chimebox_system_disk_filename }}"
+{% if chimebox_shutdown_action | default('restart') in ['poweroff', 'reboot'] %}
+
+# In-Mac "Shut Down" detection. BasiliskII's process only exits when Mac
+# OS calls PowerOff (the Special > Shut Down path); a Restart is an
+# in-process warm reboot that never returns to the supervisor loop below.
+# We tell a deliberate Shut Down from a crash by the HFS "volume
+# unmounted cleanly" flag: drAtrb (16-bit big-endian at byte offset
+# 1034 = MDB@1024 + 10), bit 0x0100. A clean Shut Down unmounts the
+# volume (bit set); a crash leaves it dirty. start.sh runs as the kiosk
+# user, which owns System.dsk, so no privilege is needed to read it.
+system_disk_cleanly_unmounted() {
+    local atrb
+    atrb=$(dd if="${SYSTEM_DISK}" bs=1 skip=1034 count=2 2>/dev/null \
+           | od -An -tx1 | tr -d ' \n')
+    [ -n "${atrb}" ] && (( 0x${atrb} & 0x0100 ))
+}
+{% endif %}
 {% if chimebox_audio_startup_chime_enabled %}
 
 # Mac OS startup chime (host-side; see roles/audio for sourcing).
@@ -142,9 +159,16 @@ export SDL_VIDEO_CENTERED=1
 # discriminator we trust.
 #
 # Per chimebox_shutdown_action ({{ chimebox_shutdown_action | default('restart') }}):
-#   restart -- v1 default; smooth in-place restart loop (this script).
-{# Future v2 will branch on chimebox_shutdown_action; for now only
-   'restart' is implemented and any other value falls through to it. #}
+#   restart  -- v1 default; smooth in-place restart loop (this script
+#               respawns BasiliskII after every exit, so a Mac "Shut Down"
+#               just looks like a reboot).
+#   poweroff -- a Mac "Shut Down" (clean unmount of System.dsk) powers the
+#               Pi off; crashes still respawn with backoff. Restart is
+#               unaffected (in-process warm reboot). Needs the
+#               /etc/sudoers.d/chimebox-shutdown drop-in (installed by the
+#               chimebox role when this is set).
+#   reboot   -- like poweroff, but reboots the Pi (back through the
+#               Plymouth splash) instead of powering off.
 
 CRASH_THRESHOLD_SEC=5
 MAX_BACKOFF_SEC=60
@@ -181,6 +205,29 @@ while :; do
 
     echo "chimebox: BasiliskII exited rc=${rc} after ${runtime}s" \
         >> "${LOG_FILE}"
+{% if chimebox_shutdown_action | default('restart') in ['poweroff', 'reboot'] %}
+
+    # Did the kid choose "Shut Down" from inside Mac OS? That cleanly
+    # unmounts System.dsk before BasiliskII exits. Require a non-trivial
+    # runtime so a pre-mount startup crash (System.dsk still clean from a
+    # previous shutdown) isn't mistaken for one. An operator stop via the
+    # bedtime sentinel is handled at the top of the loop, so skip it here.
+    if [ ! -f "${SENTINEL_FILE}" ] \
+            && [ "${runtime}" -ge "${CRASH_THRESHOLD_SEC}" ] \
+            && system_disk_cleanly_unmounted; then
+        echo "chimebox: Mac OS shut down cleanly from within;" \
+             "{{ 'powering off' if chimebox_shutdown_action == 'poweroff' else 'rebooting' }} the Pi." \
+            >> "${LOG_FILE}"
+        if shutdown_out=$(sudo -n /usr/bin/systemctl {{ chimebox_shutdown_action }} 2>&1); then
+            [ -n "${shutdown_out}" ] && echo "${shutdown_out}" >> "${LOG_FILE}"
+            sleep 60   # system is going down; hold so we don't respawn
+        else
+            echo "chimebox: {{ chimebox_shutdown_action }} failed: ${shutdown_out:-(no output)}" \
+                 "(missing sudoers drop-in?); resuming kiosk." >> "${LOG_FILE}"
+        fi
+        continue
+    fi
+{% endif %}
 
     if [ "${runtime}" -lt "${CRASH_THRESHOLD_SEC}" ]; then
         fast_fails=$((fast_fails + 1))

@@ -41,6 +41,25 @@
     group: "{{ chimebox_user }}"
     mode: "0750"
 
+# When chimebox_shutdown_action powers off / reboots the Pi on an in-Mac
+# "Shut Down", start.sh (running as the kiosk user) needs to invoke that
+# one systemctl verb as root. Grant exactly that, and nothing more.
+- name: Install sudoers drop-in for in-Mac shutdown
+  ansible.builtin.template:
+    src: sudoers-chimebox-shutdown.j2
+    dest: /etc/sudoers.d/chimebox-shutdown
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+  when: chimebox_shutdown_action | default('restart') in ['poweroff', 'reboot']
+
+- name: Remove in-Mac shutdown sudoers drop-in when not used
+  ansible.builtin.file:
+    path: /etc/sudoers.d/chimebox-shutdown
+    state: absent
+  when: chimebox_shutdown_action | default('restart') not in ['poweroff', 'reboot']
+
 - name: Install chimebox .xinitrc
   ansible.builtin.template:
     src: xinitrc.j2
