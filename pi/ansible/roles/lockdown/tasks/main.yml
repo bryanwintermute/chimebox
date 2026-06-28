@@ -70,10 +70,19 @@
       CtrlAltDelBurstAction={{ 'none' if chimebox_lockdown_ctrl_alt_del == 'mask' else 'reboot-force' }}
   notify: Reexec systemd manager
 
-- name: Verify chimebox user has no sudoers entries
+- name: Verify the kiosk user has no UNEXPECTED sudoers entries
+  # The kiosk user must never have broad sudo. Two narrow, role-managed
+  # NOPASSWD grants are intentional and allowed, so we exclude their files:
+  #   * /etc/sudoers.d/chimebox-shutdown -- the `chimebox` role's in-Mac
+  #     "Shut Down" feature (a single `systemctl poweroff|reboot`), present
+  #     only when chimebox_shutdown_action is poweroff/reboot.
+  #   * /etc/sudoers.d/chimebox-recovery -- the recovery-keystroke role's
+  #     force-reset / emergency-stop helpers.
+  # Any OTHER sudoers entry naming the kiosk user is unexpected -> fail.
   ansible.builtin.shell: |
     set -o pipefail
-    if grep -rE "^[^#]*\\b{{ chimebox_user }}\\b" /etc/sudoers /etc/sudoers.d 2>/dev/null; then
+    if grep -rE "^[^#]*\\b{{ chimebox_user }}\\b" /etc/sudoers /etc/sudoers.d \
+         --exclude=chimebox-shutdown --exclude=chimebox-recovery 2>/dev/null; then
         exit 1
     fi
     exit 0

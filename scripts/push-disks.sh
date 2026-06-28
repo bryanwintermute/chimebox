@@ -113,8 +113,11 @@ chimebox_ssh_interactive "
     elif ! sudo grep -qE \"^disk ${CHIMEBOX_RUNTIME_DIR//\\//\\\\/}\\/System.dsk\" \"\$PREFS\"; then
         echo 'InfiniteHD: WARNING no System.dsk line to anchor after; NOT added.'
     else
-        # Insert library-disk line right after the existing system-disk line.
-        sudo sed -i \"/^disk ${CHIMEBOX_RUNTIME_DIR//\\//\\\\/}\\/System.dsk/a disk \$LIB_PATH\" \"\$PREFS\"
+        # System.dsk is already first; a plain append keeps it the boot disk.
+    # (sed insert-after-anchor was fragile: controller-side slash-escaping
+    # mangled through the nested SSH heredoc on a fresh box. grep -qF above
+    # keeps this idempotent; the elif anchors that System.dsk exists first.)
+        sudo tee -a \"\$PREFS\" >/dev/null <<<\"disk \$LIB_PATH\"
         echo 'InfiniteHD: added to BasiliskII prefs.'
     fi
 
