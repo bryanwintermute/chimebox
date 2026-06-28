@@ -65,6 +65,13 @@ chimebox_argon_one_v3: true
 # Mac screen. (The 'matched-stretched' override on chimebox-bryan exists
 # only for JetKVM coordinate mapping and would distort a real monitor.)
 
+# Mouse: pillarbox defaults to init_grab=true (relative capture) which feels
+# muddy/laggy on a real 1440x1080 LCD even with Mac tracking on fast. Override
+# to absolute pointer -- much snappier (verified live on pippin 2026-06-28).
+# Tradeoff: the cursor can drift into the black pillarbox bars (harmless; X has
+# nothing there). Kid containment is unaffected (no host UI to reach).
+chimebox_init_grab: false
+
 # The Mac OS startup chime -- the signature delight. Host-side WAV played
 # before each BasiliskII launch (the emulator fast-paths past the ROM
 # chime). The per-machine WAV source path lives in local.yml.
