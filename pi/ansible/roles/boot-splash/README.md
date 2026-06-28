@@ -34,10 +34,11 @@ each edit (Ansible's `backup: true`).
 
 ## Customizing the splash image
 
-The shipped `files/splash.png` is intentionally generic — a 1024×768
-solid `#cccccc` gray with a subtle dotted-border square in the
-middle. It's safe for OSS distribution: no Apple iconography,
-no third-party trademarks.
+The shipped `files/splash.png` is the **chimebox project icon** — the
+cartoon speaker-unit-in-a-box (see the repo's `branding/` directory)
+centered on `#cccccc` classic Mac gray. It's safe for OSS distribution:
+AI-generated art with no Apple iconography or third-party trademarks
+(see `LICENSING.md`, Layer 7).
 
 For a personal chimebox, drop your own splash at:
 

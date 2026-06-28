@@ -108,8 +108,9 @@ Jan 2025), purely prompt-generated images are **not copyrightable** in the U.S.
 (other jurisdictions may differ). Chimebox asserts no copyright in this art (nor
 in its purely mechanical edits); **no rights are asserted** and it is **not**
 covered by the Apache 2.0 license above. It contains no Apple logo or other known
-third-party trademarks. See [`branding/README.md`](./branding/README.md) for full
-provenance.
+third-party trademarks. Derived copies (e.g. the Plymouth boot splash at
+`pi/ansible/roles/boot-splash/files/splash.png`) carry the same status. See
+[`branding/README.md`](./branding/README.md) for full provenance.
 
 ## What this means in practice
 

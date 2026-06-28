@@ -11,10 +11,12 @@ chimebox_boot_splash_enabled: true
 chimebox_boot_splash_theme: chimebox
 
 # Image filename (relative to the role's files/ directory) to use as
-# the splash PNG. The committed default is `splash.png` -- a solid
-# light-gray placeholder, intentionally generic for OSS distribution.
+# the splash PNG. The committed default is `splash.png` -- the chimebox
+# project icon (see the repo's branding/ directory) centered on classic
+# Mac gray. It is AI-generated art with no third-party trademarks
+# (see LICENSING.md, Layer 7), so it is safe for OSS distribution.
 #
-# To use a custom image (e.g. a Happy Mac for a personal chimebox),
+# To use a different image (e.g. a Happy Mac for a personal chimebox),
 # drop it at:
 #   pi/ansible/roles/boot-splash/files/local-splash.png
 # and override this var in host_vars:
