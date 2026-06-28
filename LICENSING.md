@@ -99,6 +99,18 @@ a local disk image used only on that user's chimebox.
 If a chimebox user wishes to publish a prebuilt disk image: don't, unless
 every piece of software on it is verifiably under a license that permits it.
 
+## Layer 7: project branding / art
+
+The icon and logo art under [`branding/`](./branding/) is **AI-generated**
+(Google Gemini) and, per current U.S. Copyright Office guidance
+([*Copyright and Artificial Intelligence, Part 2*](https://www.copyright.gov/ai/),
+Jan 2025), purely prompt-generated images are **not copyrightable** in the U.S.
+(other jurisdictions may differ). Chimebox asserts no copyright in this art (nor
+in its purely mechanical edits); **no rights are asserted** and it is **not**
+covered by the Apache 2.0 license above. It contains no Apple logo or other known
+third-party trademarks. See [`branding/README.md`](./branding/README.md) for full
+provenance.
+
 ## What this means in practice
 
 ### For a personal deployment
@@ -124,5 +136,6 @@ disks / Macintosh Garden content: get a lawyer.
 ## See also
 
 - [`NOTICE`](./NOTICE) — Apache 2.0 attribution requirements
+- [`branding/README.md`](./branding/README.md) — project art provenance (AI-generated)
 - [`disks/README.md`](./disks/README.md) — how to obtain ROMs and disks
 - [Apache 2.0 license text](./LICENSE)

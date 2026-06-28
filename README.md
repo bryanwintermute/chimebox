@@ -1,7 +1,13 @@
+<div align="center">
+
+<img src="branding/chimebox-icon-256.png" alt="chimebox" width="180">
+
 # chimebox
 
-> A locked-down, internet-free, period-correct retro computing experience on a
-> Raspberry Pi — designed as a young person's first real computer.
+_A locked-down, internet-free, period-correct retro computing experience on a
+Raspberry Pi — designed as a young person's first real computer._
+
+</div>
 
 ## Status
 
