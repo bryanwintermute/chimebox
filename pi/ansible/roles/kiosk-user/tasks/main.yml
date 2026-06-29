@@ -57,7 +57,11 @@
               # so the brief tty1 visible window between plymouth-quit and
               # X server start is blank, not "chimebox login: chimebox".
               clear
-              exec startx -- -nocursor
+              # -quiet hushes the X.Org banner; redirecting stdout+stderr keeps
+              # the "xauth: file ... does not exist" + startup chatter off the
+              # screen (logged instead). This is the boot-text flash users see.
+              exec startx -- -nocursor -quiet vt1 \
+                  >"{{ chimebox_runtime_dir }}/logs/xstart.log" 2>&1
           else
               # kiosk-x role hasn't completed yet (e.g. in mid-provisioning).
               # Sleep instead of letting getty respawn-loop.
