@@ -29,10 +29,10 @@ chimebox_panic_button_escape_to_tty_enabled: false
 # The Ctrl+Alt+Shift+Z "restore latest snapshot" kid-reset combo is an
 # ADULT recovery tool (undo a disaster the kid caused). It is DESTRUCTIVE
 # -- it rolls System.dsk back to the last snapshot, discarding anything
-# since. Left OFF (role default) for the handoff so a kid mashing keys
-# can't trigger a rollback. Flip to true only if a supervising adult
-# wants the one-combo undo and accepts the obscure-combo risk.
-chimebox_panic_button_kid_reset_enabled: false
+# since. ENABLED for this deployment: required so a remote adult can do a
+# one-combo undo. Obscure enough that a kid is unlikely to hit it; rolls
+# back to the latest snapshot (the blessed baseline after factory-bless).
+chimebox_panic_button_kid_reset_enabled: true
 
 # --- Resilience (she's offline; Bryan is remote) ----------------------
 
