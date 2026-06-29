@@ -1,0 +1,42 @@
+---
+# host_vars/<host>/local.yml.example -- copy to host_vars/<host>/local.yml
+# and fill in. The real file is gitignored (per-host secrets + anything that
+# reveals the deployment location): Wi-Fi PSKs, LAN range, audio device,
+# chime WAV path, home-LAN prefix. Non-secret per-host config goes in the
+# committed main.yml instead.
+
+# --- Wi-Fi ------------------------------------------------------------------
+# LIST EVERY network the box should join. The single SSID baked by Raspberry
+# Pi Imager is NOT preserved once Ansible provisions the box -- only what's
+# listed here survives. Include the deployment net AND the build-site net
+# (or first-boot/build on Ethernet). NM auto-connects to whichever known SSID
+# is in range; use priority to prefer one. PSKs are secret -> only here.
+chimebox_wifi_networks:
+  - ssid: "DeploymentNet"      # where the box lives
+    psk: "REPLACE-ME"
+    priority: 20
+  - ssid: "BuildBenchNet"      # your bench, for provisioning/testing
+    psk: "REPLACE-ME"
+    priority: 10
+
+# Pin 2.4GHz if the box grabs a weak 5GHz BSSID and drops (needs a 2.4 radio
+# on the network). Leave unset to allow either band. Belongs in main.yml, but
+# documented here as a common per-location tweak.
+# chimebox_wifi_band: bg
+
+# --- LAN / firewall ---------------------------------------------------------
+chimebox_lan_cidrs:
+  - 192.168.1.0/24             # the deployment site's subnet
+
+# --- Audio ------------------------------------------------------------------
+# Route by card NAME (find with: chimebox-audio-list). 'Headphones' = onboard.
+chimebox_audio_card: Headphones
+chimebox_audio_master_control: PCM
+chimebox_audio_startup_chime_src: /path/to/StartupMacQuadra.wav
+
+# --- Phone-home (WireGuard, optional) ---------------------------------------
+# Operator's home-LAN IPv4 prefix (reveals the LAN -> kept out of main.yml).
+chimebox_phone_home_home_lan_prefix: "10.0.0."
+# Optional ntfy alerts when the box can't reach home:
+# chimebox_phone_home_notify: true
+# chimebox_phone_home_oob_ntfy_topic: "chimebox-<host>-XXXXXX"
