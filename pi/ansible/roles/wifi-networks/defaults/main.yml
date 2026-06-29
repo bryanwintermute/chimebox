@@ -1,11 +1,11 @@
 ---
 # roles/wifi-networks/defaults/main.yml
 
-# Additional Wi-Fi networks the chimebox should be able to join, beyond
-# the single network baked in at flash time (Raspberry Pi Imager only
-# supports one). NetworkManager will auto-connect to whichever known
-# SSID is in range, so listing a build-site network and a deployment
-# network lets one image move between locations with no changes.
+# Wi-Fi networks the chimebox should join. List EVERY network here: the
+# Imager-baked profile is replaced when this role runs, so only these
+# survive. NetworkManager auto-connects to whichever known SSID is in
+# range, so listing build-site + deployment nets lets one image move
+# between locations. First boot bootstraps on the Imager net or Ethernet.
 #
 # Each entry:
 #   ssid:     (required) the network name

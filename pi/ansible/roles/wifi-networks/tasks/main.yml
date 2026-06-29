@@ -1,12 +1,12 @@
 ---
 # roles/wifi-networks/tasks/main.yml
 #
-# Lay down a NetworkManager keyfile per entry in chimebox_wifi_networks
-# so the box can roam between a build-site network and a deployment
-# network (NM auto-connects to whichever known SSID is in range). The
-# single network configured at flash time (Raspberry Pi Imager) only
-# bootstraps first boot; these are managed reproducibly from the host's
-# gitignored local.yml.
+# Lay down a NetworkManager keyfile per entry in chimebox_wifi_networks.
+# The Imager-baked Wi-Fi profile is NOT preserved once provisioning runs --
+# only the networks listed here survive. So list every SSID the box needs
+# (deployment net, and the build-site net too if you want Wi-Fi at the
+# bench); NM auto-connects to whichever known SSID is in range. Managed
+# reproducibly from the host's gitignored local.yml.
 
 - name: Deploy NetworkManager wifi connection profiles
   ansible.builtin.template:

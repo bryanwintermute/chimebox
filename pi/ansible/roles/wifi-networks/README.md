@@ -59,13 +59,13 @@ chimebox_wifi_networks:
 
 ## Recommended pattern
 
-- **Raspberry Pi Imager**: bake in the *build-site* network only — just
-  enough for first boot + SSH so Ansible can run.
-- **This role**: list the *deployment* network (and any others). Avoid
-  also listing the exact network already baked by the Imager, or NM
-  would hold two profiles for the same SSID. (If you'd rather this role
-  own every network, configure no Wi-Fi in the Imager and instead first-
-  boot on Ethernet, then list all networks here.)
+- **Raspberry Pi Imager**: bake in the *build-site* network for first boot +
+  SSH (or first-boot on Ethernet). **The Imager Wi-Fi profile is not preserved**
+  once this role runs — provisioning leaves only the networks listed below.
+- **This role**: list *every* network the box should know — the deployment
+  network **and** the build-site network if you want Wi-Fi at the bench.
+  (Ethernet at the build site sidesteps it; her unit then runs purely on the
+  listed networks.) Use `priority` to prefer the deployment net.
 
 ## Verifying
 
