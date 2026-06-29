@@ -6,9 +6,13 @@
 # BOOTSTRAP (see README) and is deliberately NOT managed here, so this
 # role -- in a public repo -- contains zero secrets.
 
-- name: Install wireguard-tools
+- name: Install wireguard-tools and openresolv
   ansible.builtin.apt:
-    name: wireguard-tools
+    name:
+      - wireguard-tools
+      # openresolv provides the resolvconf wg-quick needs for a `DNS =` line;
+      # the minimal image lacks it and wg-quick aborts ("resolvconf: not found").
+      - openresolv
     state: present
     update_cache: true
     cache_valid_time: 3600
