@@ -16,6 +16,10 @@ ssid={{ item.ssid }}
 {% if item.hidden | default(false) %}
 hidden=true
 {% endif %}
+{% set _band = item.band | default(chimebox_wifi_band) | default('') %}
+{% if _band %}
+band={{ _band }}
+{% endif %}
 
 [wifi-security]
 key-mgmt=wpa-psk

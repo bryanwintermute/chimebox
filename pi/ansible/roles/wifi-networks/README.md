@@ -56,6 +56,7 @@ chimebox_wifi_networks:
 | `psk` | yes | WPA2 pre-shared key (secret) |
 | `priority` | no | autoconnect priority; higher wins when several are visible (default 0) |
 | `hidden` | no | `true` for a non-broadcast SSID (default false) |
+| `band` | no | pin to a band: `bg` (2.4GHz) or `a` (5GHz). Defaults to `chimebox_wifi_band`; unset = either band |
 
 ## Recommended pattern
 
