@@ -50,6 +50,11 @@ copy, or vault it. You bootstrap it by hand, once, per box:
    [Interface]
    PrivateKey = <chimebox private key>
    Address    = <this box's tunnel IP>/32
+   # 1280 avoids MTU black-holes: large pkts (e.g. SSH kex) silently drop over
+   # constrained uplinks (LTE hotspot) while ping still works. Verified
+   # necessary on pippin 2026-06-28. DNS line needs openresolv (role installs).
+   MTU        = 1280
+   DNS        = <home resolver IP, optional>
 
    [Peer]
    PublicKey           = <home server public key>
