@@ -215,6 +215,20 @@ ansible-playbook -i inventory.ini playbook.yml          # NOPASSWD set
 See [`pi/ansible/README.md`](./ansible/README.md) for what the playbook
 does and how to run it.
 
+## Step 8 — Disks, then boot the kiosk
+
+Ansible installs everything *except* the ROM and disk images. Finish with:
+
+1. **Disk prep** — build/fetch `System.dsk` + `InfiniteHD.dsk` on your
+   workstation (see [`disk-prep/README.md`](../disk-prep/README.md)).
+2. **Push disks** — `cd scripts && cp config.example.sh config.sh` (point at
+   your Pi), then `./push-disks.sh`. Reboot → it comes up a chimebox.
+   - Gifting a curated image? Push your blessed one last:
+     `./push-disks.sh --blessed /path/to/factory.dsk`.
+
+Day-2 ops (bedtime, snapshot, kid-reset, factory-bless) live in
+[`scripts/`](../scripts/).
+
 ## Troubleshooting
 
 **Pi doesn't boot (no green LED, no HDMI signal):**
