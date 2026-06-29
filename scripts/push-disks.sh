@@ -15,6 +15,16 @@ SCRIPT_NAME="push-disks"
 # shellcheck disable=SC1091
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
 
+# --blessed <factory.dsk>: after the normal push, install a curated/blessed
+# System.dsk (the gift image) instead of the repo's stock one. Push this LAST.
+BLESSED=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --blessed) BLESSED="$2"; shift 2 ;;
+        *) log_err "unknown arg: $1"; exit 2 ;;
+    esac
+done
+
 # Required local files
 readonly REQUIRED_FILES=(
     "Quadra-650.rom"
@@ -126,3 +136,17 @@ chimebox_ssh_interactive "
 "
 
 log_ok "Disks installed. Reboot the Pi (or restart the kiosk) to load them."
+
+if [[ -n "${BLESSED}" ]]; then
+    [[ -f "${BLESSED}" ]] || { log_err "blessed image not found: ${BLESSED}"; exit 2; }
+    log_info "Installing BLESSED System.dsk from ${BLESSED} (stops the Mac first)..."
+    chimebox_ssh_interactive "sudo /usr/local/sbin/chimebox-stop-mac || true"
+    chimebox_rsync -P "${BLESSED}" \
+        "${CHIMEBOX_ADMIN_USER}@${CHIMEBOX_SSH_HOST}:/tmp/blessed.dsk"
+    chimebox_ssh_interactive "
+        sudo install -o ${CHIMEBOX_USER} -g ${CHIMEBOX_USER} -m 0640 \
+            /tmp/blessed.dsk '${CHIMEBOX_RUNTIME_DIR}/System.dsk'
+        sudo rm -f /tmp/blessed.dsk /run/chimebox-bedtime
+    "
+    log_ok "Blessed image installed as System.dsk; kiosk will respawn the curated Mac."
+fi

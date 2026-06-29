@@ -84,12 +84,15 @@ walkthroughs.**
    [`disk-prep/README.md`](./disk-prep/README.md).
 
 4. **Provision the Pi** — from `pi/ansible/`, copy
-   `inventory.example.ini` to `inventory.ini`, edit for your Pi, and
-   run `ansible-playbook -i inventory.ini playbook.yml`.
+   `inventory.example.ini` to `inventory.ini`, copy
+   `host_vars/local.yml.example` to `host_vars/<host>/local.yml` and fill it,
+   then run `ansible-playbook -i inventory.ini playbook.yml -K` (`-K` prompts
+   for sudo; or grant the admin user NOPASSWD — see `pi/SETUP.md`).
 
 5. **Push disks to the Pi** — `cd scripts && cp config.example.sh
    config.sh` (edit for your Pi), then `./push-disks.sh`. Reboot the Pi.
-   It comes up as a chimebox.
+   It comes up as a chimebox. (Gifting a curated image? push your blessed
+   one last: `./push-disks.sh --blessed /path/to/factory.dsk`.)
 
 Day-2 ops scripts (bedtime, snapshot, kid-reset, service-mode) live in
 [`scripts/`](./scripts/). See

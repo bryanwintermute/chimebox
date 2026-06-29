@@ -185,8 +185,31 @@ cd pi/ansible
 cp inventory.example.ini inventory.ini
 # Edit inventory.ini to match your Pi's hostname/IP:
 #   chimebox-dev ansible_host=chimebox-dev.local ansible_user=admin
+```
 
-ansible-playbook -i inventory.ini playbook.yml
+**Per-host config + secrets.** Settings live in `host_vars/<host>/main.yml`
+(committed, non-secret) and `host_vars/<host>/local.yml` (gitignored: Wi-Fi
+PSKs, LAN range, audio device, chime path). Copy the sample and fill it in:
+
+```sh
+cp host_vars/local.yml.example host_vars/<host>/local.yml
+$EDITOR host_vars/<host>/local.yml
+```
+
+**sudo / become.** The play uses `become: true`. A fresh Imager box has
+*password* sudo, so either pass `--ask-become-pass` every run, or grant the
+admin user passwordless sudo once (recommended for headless ops):
+
+```sh
+echo 'admin ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/010-admin-nopasswd
+sudo chmod 440 /etc/sudoers.d/010-admin-nopasswd && sudo visudo -c
+```
+
+Then provision:
+
+```sh
+ansible-playbook -i inventory.ini playbook.yml          # NOPASSWD set
+# or: ansible-playbook -i inventory.ini playbook.yml -K  # type the sudo pw
 ```
 
 See [`pi/ansible/README.md`](./ansible/README.md) for what the playbook

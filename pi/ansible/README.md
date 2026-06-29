@@ -23,9 +23,13 @@ cp inventory.example.ini inventory.ini
 # Sanity-check connectivity:
 ansible -i inventory.ini chimebox -m ping
 
-# Run the playbook:
-ansible-playbook -i inventory.ini playbook.yml
+# Run the playbook (-K prompts for sudo, unless the admin user has NOPASSWD):
+ansible-playbook -i inventory.ini playbook.yml -K
 ```
+
+Per-host secrets/location config go in `host_vars/<host>/local.yml`
+(gitignored; copy `host_vars/local.yml.example`). The play uses `become`, so a
+fresh box needs `-K` or a one-time admin NOPASSWD drop-in (see `../SETUP.md`).
 
 The playbook is idempotent — re-running on an already-provisioned Pi is
 safe and a quick no-op.

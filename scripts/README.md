@@ -18,7 +18,7 @@ chmod +x config.sh
 
 | Script | Purpose | Frequency |
 |---|---|---|
-| `push-disks.sh` | Rsync prepared disks (`../disks/`) to the Pi | Once after disk-prep, or any time disks change |
+| `push-disks.sh` | Rsync disks to the Pi (`--blessed <factory.dsk>` pushes a curated gift image as System.dsk, last) | After disk-prep, or any time disks change |
 | `snapshot-now.sh` | Trigger a manual snapshot of `System.dsk` | Before risky changes; ad hoc |
 | `kid-reset.sh` | Restore `System.dsk` from a chosen snapshot | When something goes wrong on the Pi side |
 | `factory-bless.sh` | Capture current `System.dsk` as the factory baseline | After milestones (curation, kid-shortlist setup); operator-blessed |
