@@ -85,9 +85,9 @@ chimebox_audio_startup_chime_enabled: true
 # chimebox role installs a narrow sudoers drop-in for the one systemctl verb.
 chimebox_shutdown_action: poweroff
 
-# NOTE: chimebox_wifi_band is intentionally NOT set here. The 'bg'
-# (2.4GHz) lock on chimebox-bryan is specific to that location's
-# band-steering AP. Only add a band lock here if her location shows the
-# same 5GHz thrash (watch `journalctl -t chimebox-net-watchdog` and the
-# wpa_supplicant ASSOC-REJECT pattern from #23). The powersave-off +
-# infinite-retries tuning from the wifi-tuning role applies regardless.
+# NOTE: chimebox_wifi_band: bg pins 2.4GHz. Build-day forensics (2026-06-28)
+# showed pippin grabbed a weak 5GHz BSSID (-76 dBm, ch149) and dropped; 2.4 is
+# stronger/steadier here. Requires her network (AlbertaNet2) to have a 2.4GHz
+# radio -- confirm before handoff; remove if hers is 5GHz-only. The
+# powersave-off + infinite-retries tuning applies regardless.
+chimebox_wifi_band: bg
