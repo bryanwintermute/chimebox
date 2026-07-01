@@ -9,10 +9,16 @@
 #
 # Each entry:
 #   ssid:     (required) the network name
-#   psk:      (required) the WPA2 pre-shared key  -- SECRET
+#   psk:      (required) the pre-shared key  -- SECRET
 #   priority: (optional) autoconnect priority, higher wins when several
 #             known networks are visible at once. Default 0.
 #   hidden:   (optional) true if the SSID is not broadcast. Default false.
+#   band:     (optional) "bg" (2.4GHz) or "a" (5GHz). Defaults to
+#             chimebox_wifi_band; unset = either band.
+#   key_mgmt: (optional) "wpa-psk" (WPA2, default) or "sae" (WPA3-Personal).
+#             A WPA3 network needs "sae"; a wpa-psk profile silently fails to
+#             associate on a WPA3-only AP (or connects via WPA2 on a
+#             transitional AP). sae emits pmf=3 (required).
 #
 # SECRETS: because psk values are secret and this repo is public, define
 # the actual list in the host's GITIGNORED local.yml, not here. This

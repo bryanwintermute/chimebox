@@ -22,7 +22,13 @@ band={{ _band }}
 {% endif %}
 
 [wifi-security]
-key-mgmt=wpa-psk
+# key-mgmt: wpa-psk (WPA2, default) or sae (WPA3-Personal). SAE mandates
+# Protected Management Frames, so we emit pmf=3 (required) with it -- NM
+# silently drops the whole keyfile if sae is paired with pmf=optional(2).
+key-mgmt={{ item.key_mgmt | default('wpa-psk') }}
+{% if (item.key_mgmt | default('wpa-psk')) == 'sae' %}
+pmf=3
+{% endif %}
 psk={{ item.psk }}
 
 [ipv4]

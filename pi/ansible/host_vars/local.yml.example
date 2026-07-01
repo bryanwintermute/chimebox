@@ -15,6 +15,7 @@ chimebox_wifi_networks:
   - ssid: "DeploymentNet"      # where the box lives
     psk: "REPLACE-ME"
     priority: 20
+    # key_mgmt: "sae"          # uncomment for a WPA3-Personal network
   - ssid: "BuildBenchNet"      # your bench, for provisioning/testing
     psk: "REPLACE-ME"
     priority: 10

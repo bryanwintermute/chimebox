@@ -53,10 +53,11 @@ chimebox_wifi_networks:
 | Key | Required | Meaning |
 |---|---|---|
 | `ssid` | yes | network name |
-| `psk` | yes | WPA2 pre-shared key (secret) |
+| `psk` | yes | pre-shared key (secret) |
 | `priority` | no | autoconnect priority; higher wins when several are visible (default 0) |
 | `hidden` | no | `true` for a non-broadcast SSID (default false) |
 | `band` | no | pin to a band: `bg` (2.4GHz) or `a` (5GHz). Defaults to `chimebox_wifi_band`; unset = either band |
+| `key_mgmt` | no | `wpa-psk` (WPA2, default) or `sae` (WPA3-Personal). Use `sae` for a WPA3 network — a `wpa-psk` profile can't associate on a WPA3-only AP. Emits `pmf=3`. |
 
 ## Recommended pattern
 
